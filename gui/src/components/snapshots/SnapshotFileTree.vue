@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ChevronRight, ChevronDown, Download, Folder, FolderOpen, File, Loader2 } from '@lucide/vue'
 import { formatBytes } from '@/lib/jobUtils'
 import type { SnapshotFileEntry } from '@/types'
@@ -22,6 +23,8 @@ const emit = defineEmits<{
   'update:modelValue': [value: string[]]
   download: [entry: SnapshotFileEntry]
 }>()
+
+const { t } = useI18n()
 
 // Lazy-loading state, keyed by directory path.
 const childrenByPath = ref(new Map<string, SnapshotFileEntry[]>())
@@ -93,7 +96,7 @@ async function toggleDir(entry: SnapshotFileEntry) {
       childrenByPath.value.set(path, children)
       childrenByPath.value = new Map(childrenByPath.value)
     } catch (e: any) {
-      errors.value.set(path, apiErrorMessage(e, 'Failed to load directory.'))
+      errors.value.set(path, apiErrorMessage(e, t('fileTree.loadDirFailed')))
       errors.value = new Map(errors.value)
       // Collapse again so the chevron offers a retry.
       expanded.value.delete(path)
@@ -195,8 +198,8 @@ function toggle(entry: SnapshotFileEntry) {
         v-if="downloadable"
         type="button"
         :class="['shrink-0 p-0.5 text-muted-foreground hover:text-foreground', entry.type === 'dir' && 'ml-auto']"
-        :aria-label="entry.type === 'dir' ? `Download ${name(entry.path)} as ZIP` : `Download ${name(entry.path)}`"
-        :title="entry.type === 'dir' ? 'Download as ZIP' : 'Download'"
+        :aria-label="entry.type === 'dir' ? t('fileTree.downloadAsZipAria', { name: name(entry.path) }) : t('fileTree.downloadAria', { name: name(entry.path) })"
+        :title="entry.type === 'dir' ? t('fileTree.downloadAsZip') : t('fileTree.download')"
         @click.stop="emit('download', entry)"
       >
         <Download class="h-3.5 w-3.5" />

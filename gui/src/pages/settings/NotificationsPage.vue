@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useForm, useField } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
 import { z } from 'zod'
@@ -24,6 +25,7 @@ import type { ApiResponse, NotificationSettings, WebhookSettings } from '@/types
 // ---------------------------------------------------------------------------
 
 const loading = ref(false)
+const { t } = useI18n()
 const submitError = ref<string | null>(null)
 const success = ref(false)
 
@@ -44,7 +46,7 @@ const schema = toTypedSchema(
         webhook_secret: z.string(),
     }).superRefine((data, ctx) => {
         if (data.webhook_enabled && !isHttpURL(data.webhook_url.trim())) {
-            ctx.addIssue({ code: 'custom', path: ['webhook_url'], message: 'Must be an http(s) URL' })
+            ctx.addIssue({ code: 'custom', path: ['webhook_url'], message: t('settingsNotifications.urlInvalid') })
         }
     }),
 )
@@ -145,7 +147,7 @@ const submit = handleSubmit(async (values) => {
         success.value = true
         setTimeout(() => { success.value = false }, 3000)
     } catch (e: any) {
-        submitError.value = apiErrorMessage(e, 'Failed to save notification settings')
+        submitError.value = apiErrorMessage(e, t('settingsNotifications.saveFailed'))
     }
 })
 
@@ -166,9 +168,9 @@ const sendTestWebhook = handleSubmit(async (values) => {
             method: 'POST',
             body: { url: values.webhook_url.trim(), secret: values.webhook_secret },
         })
-        webhookTestResult.value = { ok: true, message: 'Test webhook delivered.' }
+        webhookTestResult.value = { ok: true, message: t('settingsNotifications.testDelivered') }
     } catch (e: any) {
-        webhookTestResult.value = { ok: false, message: apiErrorMessage(e, 'Failed to send the test webhook') }
+        webhookTestResult.value = { ok: false, message: apiErrorMessage(e, t('settingsNotifications.testFailed')) }
     } finally {
         testingWebhook.value = false
     }
@@ -179,13 +181,12 @@ const sendTestWebhook = handleSubmit(async (values) => {
     <!-- Section header -->
     <div class="flex items-start justify-between gap-4 mb-6">
         <div>
-            <h2 class="text-base font-semibold">Notification Events</h2>
+            <h2 class="text-base font-semibold">{{ t('settingsNotifications.title') }}</h2>
             <p class="mt-1 text-sm text-muted-foreground">
-                Choose which events trigger external notifications (email and webhook).
-                In-app notifications are always shown regardless of these settings.
+                {{ t('settingsNotifications.description') }}
             </p>
         </div>
-        <Button variant="outline" size="icon" aria-label="Refresh" :disabled="loading" @click="fetchAll">
+        <Button variant="outline" size="icon" :aria-label="t('common.refresh')" :disabled="loading" @click="fetchAll">
             <RefreshCw class="size-4" :class="{ 'animate-spin': loading }" />
         </Button>
     </div>
@@ -218,19 +219,19 @@ const sendTestWebhook = handleSubmit(async (values) => {
                 leave-active-class="transition-all duration-150" leave-to-class="-translate-y-1 opacity-0">
                 <Alert v-if="success"
                     class="border-emerald-500/30 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400">
-                    <AlertDescription>Notification settings saved.</AlertDescription>
+                    <AlertDescription>{{ t('settingsNotifications.saved') }}</AlertDescription>
                 </Alert>
             </Transition>
 
             <!-- ── Backup jobs ──────────────────────────────────────────────── -->
             <div class="flex flex-col gap-3">
-                <p class="text-sm font-medium">Backup Jobs</p>
+                <p class="text-sm font-medium">{{ t('settingsNotifications.backupJobs') }}</p>
 
                 <div class="flex items-center justify-between rounded-lg border px-4 py-3">
                     <div>
-                        <p class="text-sm font-medium">Job failed</p>
+                        <p class="text-sm font-medium">{{ t('settingsNotifications.jobFailed') }}</p>
                         <p class="text-xs text-muted-foreground">
-                            Send a notification when a backup job fails.
+                            {{ t('settingsNotifications.jobFailedHelp') }}
                         </p>
                     </div>
                     <Switch :model-value="jobFailure" @update:model-value="jobFailure = $event" />
@@ -238,9 +239,9 @@ const sendTestWebhook = handleSubmit(async (values) => {
 
                 <div class="flex items-center justify-between rounded-lg border px-4 py-3">
                     <div>
-                        <p class="text-sm font-medium">Job succeeded</p>
+                        <p class="text-sm font-medium">{{ t('settingsNotifications.jobSucceeded') }}</p>
                         <p class="text-xs text-muted-foreground">
-                            Send a notification when a backup job completes successfully.
+                            {{ t('settingsNotifications.jobSucceededHelp') }}
                         </p>
                     </div>
                     <Switch :model-value="jobSuccess" @update:model-value="jobSuccess = $event" />
@@ -251,13 +252,13 @@ const sendTestWebhook = handleSubmit(async (values) => {
 
             <!-- ── Agents ──────────────────────────────────────────────────── -->
             <div class="flex flex-col gap-3">
-                <p class="text-sm font-medium">Agents</p>
+                <p class="text-sm font-medium">{{ t('settingsNotifications.agents') }}</p>
 
                 <div class="flex items-center justify-between rounded-lg border px-4 py-3">
                     <div>
-                        <p class="text-sm font-medium">Agent went offline</p>
+                        <p class="text-sm font-medium">{{ t('settingsNotifications.agentOffline') }}</p>
                         <p class="text-xs text-muted-foreground">
-                            Send a notification when an agent stops responding.
+                            {{ t('settingsNotifications.agentOfflineHelp') }}
                         </p>
                     </div>
                     <Switch :model-value="agentOffline"
@@ -266,9 +267,9 @@ const sendTestWebhook = handleSubmit(async (values) => {
 
                 <div class="flex items-center justify-between rounded-lg border px-4 py-3">
                     <div>
-                        <p class="text-sm font-medium">Agent came back online</p>
+                        <p class="text-sm font-medium">{{ t('settingsNotifications.agentOnline') }}</p>
                         <p class="text-xs text-muted-foreground">
-                            Send a notification when an agent reconnects. Off by default.
+                            {{ t('settingsNotifications.agentOnlineHelp') }}
                         </p>
                     </div>
                     <Switch :model-value="agentOnline"
@@ -282,9 +283,9 @@ const sendTestWebhook = handleSubmit(async (values) => {
             <div class="flex flex-col gap-4">
                 <div class="flex items-center justify-between rounded-lg border px-4 py-3">
                     <div>
-                        <p class="text-sm font-medium">Send webhook notifications</p>
+                        <p class="text-sm font-medium">{{ t('settingsNotifications.webhookToggle') }}</p>
                         <p class="text-xs text-muted-foreground">
-                            HTTP POST a JSON payload to a URL on every enabled event above.
+                            {{ t('settingsNotifications.webhookToggleHelp') }}
                         </p>
                     </div>
                     <Switch :model-value="webhookEnabled" @update:model-value="webhookEnabled = $event" />
@@ -295,7 +296,7 @@ const sendTestWebhook = handleSubmit(async (values) => {
                     leave-to-class="opacity-0 -translate-y-1">
                     <div v-if="webhookEnabled" class="flex flex-col gap-4">
                         <Field>
-                            <FieldLabel for="webhook-url">Webhook URL</FieldLabel>
+                            <FieldLabel for="webhook-url">{{ t('settingsNotifications.webhookUrl') }}</FieldLabel>
                             <Input id="webhook-url" v-model="webhookUrl" placeholder="https://hooks.example.com/arkeep"
                                 autocomplete="off"
                                 :class="webhookUrlError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
@@ -303,14 +304,13 @@ const sendTestWebhook = handleSubmit(async (values) => {
                         </Field>
                         <Field>
                             <FieldLabel for="webhook-secret">
-                                Webhook Secret
-                                <span v-if="webhookExists" class="text-muted-foreground font-normal">(optional)</span>
+                                {{ t('settingsNotifications.webhookSecret') }}
+                                <span v-if="webhookExists" class="text-muted-foreground font-normal">{{ t('common.optional') }}</span>
                             </FieldLabel>
                             <Input id="webhook-secret" v-model="webhookSecret" type="password"
-                                :placeholder="webhookExists ? '(unchanged)' : ''" autocomplete="new-password" />
+                                :placeholder="webhookExists ? t('settingsOidc.unchanged') : ''" autocomplete="new-password" />
                             <p class="text-xs text-muted-foreground">
-                                Used to sign each request with an <code>X-Arkeep-Signature</code> header
-                                (HMAC-SHA256) so the receiving endpoint can verify it came from Arkeep.
+                                {{ t('settingsNotifications.webhookSecretHelp') }}
                             </p>
                         </Field>
                         <div class="flex flex-col items-start gap-2">
@@ -318,7 +318,7 @@ const sendTestWebhook = handleSubmit(async (values) => {
                                 @click="sendTestWebhook">
                                 <Loader2 v-if="testingWebhook" class="size-4 animate-spin" />
                                 <Send v-else class="size-4" />
-                                {{ testingWebhook ? 'Sending…' : 'Send test webhook' }}
+                                {{ testingWebhook ? t('settingsNotifications.sending') : t('settingsNotifications.sendTestWebhook') }}
                             </Button>
                             <p v-if="webhookTestResult" data-testid="webhook-test-result" class="text-xs"
                                 :class="webhookTestResult.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'">
@@ -333,7 +333,7 @@ const sendTestWebhook = handleSubmit(async (values) => {
             <div class="flex justify-end pt-2">
                 <Button type="submit" :disabled="isSubmitting">
                     <Loader2 v-if="isSubmitting" class="size-4 animate-spin" />
-                    {{ isSubmitting ? 'Saving…' : 'Save Settings' }}
+                    {{ isSubmitting ? t('settingsNotifications.saving') : t('settingsNotifications.saveSettings') }}
                 </Button>
             </div>
 

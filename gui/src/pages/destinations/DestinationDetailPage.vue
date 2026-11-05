@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import {
     Table,
@@ -38,8 +39,9 @@ import {
     DatabaseBackup,
 } from '@lucide/vue'
 import { api, apiErrorMessage } from '@/services/api'
+import { scheduleLabel } from '@/lib/schedule'
 import type { Destination, Job, ApiResponse, SyncDestinationResponse } from '@/types'
-import { statusVariant, statusClass, statusLabel, formatDate, formatBytes } from '@/lib/jobUtils'
+import { statusVariant, statusClass, statusLabel, jobTypeLabel, formatDate, formatBytes } from '@/lib/jobUtils'
 import { summariseSync } from '@/lib/syncSummary'
 import { lockExplanation, lockLabel } from '@/lib/destinationLocks'
 import DestinationSheet from '@/components/destinations/DestinationSheet.vue'
@@ -53,6 +55,7 @@ defineOptions({ inheritAttrs: false })
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const { t, te } = useI18n()
 const destinationId = route.params.id as string
 
 // ---------------------------------------------------------------------------
@@ -97,7 +100,7 @@ async function fetchDestination() {
         const res = await api<ApiResponse<Destination>>(`/api/v1/destinations/${destinationId}`)
         destination.value = res.data
     } catch (e: any) {
-        error.value = apiErrorMessage(e, 'Failed to load destination')
+        error.value = apiErrorMessage(e, t('destinationDetail.loadFailed'))
     } finally {
         loading.value = false
     }
@@ -128,7 +131,7 @@ async function triggerRetention() {
         await api(`/api/v1/destinations/${destinationId}/trigger-retention`, { method: 'POST' })
         setTimeout(fetchJobs, 800)
     } catch (e: any) {
-        error.value = apiErrorMessage(e, 'Failed to trigger retention')
+        error.value = apiErrorMessage(e, t('destinationDetail.triggerRetentionFailed'))
     } finally {
         triggerLoading.value = false
     }
@@ -143,7 +146,7 @@ async function triggerCheck() {
         await api(`/api/v1/destinations/${destinationId}/trigger-check`, { method: 'POST' })
         setTimeout(fetchJobs, 800)
     } catch (e: any) {
-        error.value = apiErrorMessage(e, 'Failed to trigger integrity check')
+        error.value = apiErrorMessage(e, t('destinationDetail.triggerCheckFailed'))
     } finally {
         checkLoading.value = false
     }
@@ -162,7 +165,7 @@ async function syncSnapshots() {
         setTimeout(() => { syncMessage.value = null }, 6000)
         fetchDestination()
     } catch (e: any) {
-        error.value = apiErrorMessage(e, 'Failed to sync snapshots')
+        error.value = apiErrorMessage(e, t('destinationDetail.syncFailed'))
     } finally {
         syncLoading.value = false
     }
@@ -179,7 +182,7 @@ async function confirmResetRepository() {
             `/api/v1/destinations/${destinationId}/reset-repository`, { method: 'POST' })
         destination.value = res.data
     } catch (e: any) {
-        error.value = apiErrorMessage(e, 'Failed to reset the repository')
+        error.value = apiErrorMessage(e, t('destinationDetail.resetFailed'))
     } finally {
         resetRepoLoading.value = false
         resetRepoDialogOpen.value = false
@@ -192,7 +195,7 @@ async function confirmDelete() {
         await api(`/api/v1/destinations/${destinationId}`, { method: 'DELETE' })
         router.push('/destinations')
     } catch (e: any) {
-        error.value = apiErrorMessage(e, 'Failed to delete destination')
+        error.value = apiErrorMessage(e, t('destinationDetail.deleteFailed'))
     } finally {
         deleteLoading.value = false
         deleteDialogOpen.value = false
@@ -207,27 +210,16 @@ function onSaved() {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function scheduleLabel(cron: string): string {
-    if (!cron) return 'Not scheduled'
-    const presets: Record<string, string> = {
-        '0 * * * *': 'Hourly',
-        '0 2 * * *': 'Daily at 02:00',
-        '0 0 * * *': 'Daily at midnight',
-        '0 2 * * 0': 'Weekly (Sun)',
-        '0 2 * * 1': 'Weekly (Mon)',
-        '0 2 1 * *': 'Monthly',
-        '0 3 * * *': 'Daily at 03:00',
-        '0 3 * * 0': 'Weekly (Sun 03:00)',
-        '0 3 1 * *': 'Monthly (03:00)',
-    }
-    return presets[cron] ?? cron
+function typeLabel(type: string): string {
+    const key = `destinations.type.${type}`
+    return te(key) ? t(key) : type
 }
 
 function checkModeLabel(d: Destination): string {
     switch (d.check_mode) {
-        case 'structure': return 'Structure only'
-        case 'full': return 'All data'
-        default: return `${d.check_subset_percent}% of the data per run`
+        case 'structure': return t('destinationDetail.checkStructure')
+        case 'full': return t('destinationDetail.checkFull')
+        default: return t('destinationDetail.checkSubset', { percent: d.check_subset_percent })
     }
 }
 
@@ -244,7 +236,7 @@ onMounted(() => Promise.all([fetchDestination(), fetchJobs()]))
         <!-- ── Header ─────────────────────────────────────────────────────── -->
         <div class="flex items-start justify-between gap-4">
             <div class="flex items-center gap-3">
-                <Button variant="ghost" size="icon" @click="router.push('/destinations')">
+                <Button variant="ghost" size="icon" :aria-label="t('destinationDetail.backToDestinations')" @click="router.push('/destinations')">
                     <ArrowLeft class="w-4 h-4" />
                 </Button>
                 <div>
@@ -256,26 +248,26 @@ onMounted(() => Promise.all([fetchDestination(), fetchJobs()]))
                         <div class="flex items-center gap-2.5 flex-wrap">
                             <h1 class="text-2xl font-semibold tracking-tight">{{ destination.name }}</h1>
                             <Badge :variant="destination.enabled ? 'default' : 'secondary'">
-                                {{ destination.enabled ? 'Enabled' : 'Disabled' }}
+                                {{ destination.enabled ? t('common.enabled') : t('common.disabled') }}
                             </Badge>
-                            <Badge v-if="destination.append_only" variant="outline">Append-only</Badge>
+                            <Badge v-if="destination.append_only" variant="outline">{{ t('destinations.appendOnly') }}</Badge>
                             <Badge v-if="destination.locks.length" variant="outline">{{ lockLabel(destination.locks) }}</Badge>
                             <Badge v-if="destination.retention_needs_review" variant="destructive">
-                                Retention needs reconfiguration
+                                {{ t('destinations.retentionNeedsReview') }}
                             </Badge>
                         </div>
                         <p class="mt-0.5 text-sm text-muted-foreground">
-                            Type: <span class="font-medium text-foreground uppercase">{{ destination.type }}</span>
+                            {{ t('destinationDetail.type', { type: typeLabel(destination.type) }) }}
                             <span v-if="destination.policy_count > 0">
-                                · Used by {{ destination.policy_count }} polic{{ destination.policy_count === 1 ? 'y' : 'ies' }}
+                                · {{ t('destinationDetail.usedBy', destination.policy_count, { named: { n: destination.policy_count } }) }}
                             </span>
                             <span v-if="destination.locks.length">
-                                · In use since {{ formatDate(destination.locks[0].since) }} by
+                                · {{ t('destinationDetail.inUseSince', { since: formatDate(destination.locks[0].since) }) }}
                                 <template v-for="(lock, i) in destination.locks" :key="lock.job_id">
-                                    <template v-if="i > 0">, </template>
+                                    <template v-if="i > 0">{{ t('common.listSeparator') }}</template>
                                     <RouterLink :to="{ name: 'job-detail', params: { id: lock.job_id } }"
                                         class="underline underline-offset-4 hover:text-foreground">
-                                        {{ destination.locks.length === 1 ? 'this job' : `job ${i + 1}` }}
+                                        {{ destination.locks.length === 1 ? t('destinationDetail.thisJob') : t('destinationDetail.jobNumber', { n: i + 1 }) }}
                                     </RouterLink>
                                 </template>
                                 — {{ lockExplanation(destination.locks) }}
@@ -294,34 +286,34 @@ onMounted(() => Promise.all([fetchDestination(), fetchJobs()]))
                     variant="outline" size="sm" :disabled="triggerLoading" @click="triggerRetention">
                     <Loader2 v-if="triggerLoading" class="w-4 h-4 mr-1.5 animate-spin" />
                     <Play v-else class="w-4 h-4 mr-1.5" />
-                    Run Retention Now
+                    {{ t('destinationDetail.runRetentionNow') }}
                 </Button>
                 <Button v-if="authStore.isAdmin && destination.retention_agent_id"
                     variant="outline" size="sm" :disabled="checkLoading" @click="triggerCheck">
                     <Loader2 v-if="checkLoading" class="w-4 h-4 mr-1.5 animate-spin" />
                     <ShieldCheck v-else class="w-4 h-4 mr-1.5" />
-                    Run Check Now
+                    {{ t('destinationDetail.runCheckNow') }}
                 </Button>
                 <Button v-if="authStore.isAdmin" variant="outline" size="sm" :disabled="syncLoading"
                     @click="syncSnapshots">
                     <Loader2 v-if="syncLoading" class="w-4 h-4 mr-1.5 animate-spin" />
                     <RefreshCcw v-else class="w-4 h-4 mr-1.5" />
-                    Sync Snapshots
+                    {{ t('destinationDetail.syncSnapshots') }}
                 </Button>
                 <Button v-if="authStore.isAdmin && destination.repo_initialized_at" variant="outline" size="sm"
                     data-testid="reset-repository" @click="resetRepoDialogOpen = true">
                     <DatabaseBackup class="w-4 h-4 mr-1.5" />
-                    New Repository
+                    {{ t('destinationDetail.newRepository') }}
                 </Button>
                 <Button v-if="authStore.isAdmin" variant="outline" size="sm" @click="editSheetOpen = true">
                     <PencilLine class="w-4 h-4 mr-1.5" />
-                    Edit
+                    {{ t('common.edit') }}
                 </Button>
                 <Button v-if="authStore.isAdmin" variant="outline" size="sm"
                     class="text-destructive hover:text-destructive border-destructive/30 hover:bg-destructive/5"
                     @click="deleteDialogOpen = true">
                     <Trash2 class="w-4 h-4 mr-1.5" />
-                    Delete
+                    {{ t('common.delete') }}
                 </Button>
             </div>
         </div>
@@ -343,29 +335,28 @@ onMounted(() => Promise.all([fetchDestination(), fetchJobs()]))
         </div>
         <div v-else-if="destination" class="grid grid-cols-2 gap-4 sm:grid-cols-3">
             <div class="p-4 border rounded-md">
-                <p class="text-xs text-muted-foreground uppercase tracking-wide mb-1">Repo Size</p>
+                <p class="text-xs text-muted-foreground uppercase tracking-wide mb-1">{{ t('destinationDetail.repoSize') }}</p>
                 <p class="text-sm font-medium">{{ formatBytes(destination.repo_size_bytes) }}</p>
             </div>
             <div class="p-4 border rounded-md">
-                <p class="text-xs text-muted-foreground uppercase tracking-wide mb-1">Retention Schedule</p>
+                <p class="text-xs text-muted-foreground uppercase tracking-wide mb-1">{{ t('destinationDetail.retentionSchedule') }}</p>
                 <p class="text-sm font-mono font-medium">
                     {{ destination.append_only || !destination.retention_enabled ? '—' : scheduleLabel(destination.retention_schedule) }}
                 </p>
             </div>
             <div class="p-4 border rounded-md">
-                <p class="text-xs text-muted-foreground uppercase tracking-wide mb-1">Created</p>
+                <p class="text-xs text-muted-foreground uppercase tracking-wide mb-1">{{ t('destinationDetail.created') }}</p>
                 <p class="text-sm font-medium">{{ formatDate(destination.created_at) }}</p>
             </div>
         </div>
 
         <!-- ── Retention ───────────────────────────────────────────────────── -->
         <div v-if="!loading && destination" class="border rounded-md p-4 flex flex-col gap-3">
-            <h2 class="text-sm font-semibold">Retention</h2>
+            <h2 class="text-sm font-semibold">{{ t('destinationDetail.retention') }}</h2>
 
             <Alert v-if="destination.append_only">
                 <AlertDescription class="text-sm text-muted-foreground">
-                    This destination is append-only — retention cannot run here (`forget --prune`
-                    can never succeed against storage that rejects deletes).
+                    {{ t('destinationDetail.appendOnlyWarning') }}
                 </AlertDescription>
             </Alert>
 
@@ -373,50 +364,48 @@ onMounted(() => Promise.all([fetchDestination(), fetchJobs()]))
                 <Alert variant="destructive">
                     <AlertTriangle class="h-4 w-4" />
                     <AlertDescription class="text-xs">
-                        This destination was shared by multiple policies with different retention
-                        settings before this update — retention was left disabled. Edit it to
-                        configure retention explicitly.
+                        {{ t('destinationDetail.needsReviewWarning') }}
                     </AlertDescription>
                 </Alert>
                 <Button v-if="authStore.isAdmin" variant="outline" size="sm" class="self-start" @click="editSheetOpen = true">
                     <PencilLine class="w-4 h-4 mr-1.5" />
-                    Configure Retention
+                    {{ t('destinationDetail.configureRetention') }}
                 </Button>
             </template>
 
             <template v-else-if="!destination.retention_enabled">
-                <p class="text-sm text-muted-foreground">Retention is not configured for this destination.</p>
+                <p class="text-sm text-muted-foreground">{{ t('destinationDetail.retentionNotConfigured') }}</p>
             </template>
 
             <template v-else>
                 <div class="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-3">
                     <div class="flex items-center justify-between">
-                        <span class="text-xs text-muted-foreground">Last</span>
+                        <span class="text-xs text-muted-foreground">{{ t('destinationDetail.retentionLast') }}</span>
                         <span class="text-sm font-mono font-medium">{{ destination.retention_last }}</span>
                     </div>
                     <div class="flex items-center justify-between">
-                        <span class="text-xs text-muted-foreground">Hourly</span>
+                        <span class="text-xs text-muted-foreground">{{ t('destinationDetail.retentionHourly') }}</span>
                         <span class="text-sm font-mono font-medium">{{ destination.retention_hourly }}</span>
                     </div>
                     <div class="flex items-center justify-between">
-                        <span class="text-xs text-muted-foreground">Daily</span>
+                        <span class="text-xs text-muted-foreground">{{ t('destinationDetail.retentionDaily') }}</span>
                         <span class="text-sm font-mono font-medium">{{ destination.retention_daily }}</span>
                     </div>
                     <div class="flex items-center justify-between">
-                        <span class="text-xs text-muted-foreground">Weekly</span>
+                        <span class="text-xs text-muted-foreground">{{ t('destinationDetail.retentionWeekly') }}</span>
                         <span class="text-sm font-mono font-medium">{{ destination.retention_weekly }}</span>
                     </div>
                     <div class="flex items-center justify-between">
-                        <span class="text-xs text-muted-foreground">Monthly</span>
+                        <span class="text-xs text-muted-foreground">{{ t('destinationDetail.retentionMonthly') }}</span>
                         <span class="text-sm font-mono font-medium">{{ destination.retention_monthly }}</span>
                     </div>
                     <div class="flex items-center justify-between">
-                        <span class="text-xs text-muted-foreground">Yearly</span>
+                        <span class="text-xs text-muted-foreground">{{ t('destinationDetail.retentionYearly') }}</span>
                         <span class="text-sm font-mono font-medium">{{ destination.retention_yearly }}</span>
                     </div>
                 </div>
                 <p class="text-xs text-muted-foreground">
-                    Agent: <span class="font-medium text-foreground">{{ destination.retention_agent_name || '—' }}</span>
+                    {{ t('destinationDetail.agent', { name: destination.retention_agent_name || '—' }) }}
                 </p>
             </template>
         </div>
@@ -427,48 +416,48 @@ onMounted(() => Promise.all([fetchDestination(), fetchJobs()]))
 
         <!-- ── Integrity check (issue #307) ────────────────────────────────── -->
         <div v-if="!loading && destination" class="border rounded-md p-4 flex flex-col gap-3">
-            <h2 class="text-sm font-semibold">Integrity Check</h2>
+            <h2 class="text-sm font-semibold">{{ t('destinationDetail.integrityCheck') }}</h2>
 
             <p v-if="!destination.check_enabled" class="text-sm text-muted-foreground">
-                Scheduled integrity checks are disabled for this destination.
+                {{ t('destinationDetail.checksDisabled') }}
             </p>
             <div v-else class="grid grid-cols-1 gap-x-4 gap-y-2 sm:grid-cols-2">
                 <div class="flex items-center justify-between">
-                    <span class="text-xs text-muted-foreground">Depth</span>
+                    <span class="text-xs text-muted-foreground">{{ t('destinationDetail.depth') }}</span>
                     <span class="text-sm font-medium">{{ checkModeLabel(destination) }}</span>
                 </div>
                 <div class="flex items-center justify-between">
-                    <span class="text-xs text-muted-foreground">Schedule</span>
+                    <span class="text-xs text-muted-foreground">{{ t('destinationDetail.schedule') }}</span>
                     <span class="text-sm font-mono font-medium">{{ scheduleLabel(destination.check_schedule) }}</span>
                 </div>
             </div>
 
             <div class="flex items-center gap-2 text-sm">
-                <span class="text-xs text-muted-foreground">Last check:</span>
+                <span class="text-xs text-muted-foreground">{{ t('destinationDetail.lastCheck') }}</span>
                 <template v-if="destination.last_check_status">
                     <Badge :variant="destination.last_check_status === 'succeeded' ? 'outline' : 'destructive'"
                         :class="destination.last_check_status === 'succeeded' ? 'border-emerald-500/40 text-emerald-600 dark:text-emerald-400' : ''">
-                        {{ destination.last_check_status === 'succeeded' ? 'Passed' : 'Failed' }}
+                        {{ destination.last_check_status === 'succeeded' ? t('destinationDetail.passed') : t('destinationDetail.failed') }}
                     </Badge>
                     <span class="text-muted-foreground">{{ formatDate(destination.last_check_at) }}</span>
                     <RouterLink v-if="destination.last_check_job_id"
                         :to="{ name: 'job-detail', params: { id: destination.last_check_job_id } }"
                         class="text-xs underline underline-offset-4 text-muted-foreground hover:text-foreground">
-                        View job
+                        {{ t('destinationDetail.viewJob') }}
                     </RouterLink>
                 </template>
-                <span v-else class="text-muted-foreground">Never run</span>
+                <span v-else class="text-muted-foreground">{{ t('destinationDetail.neverRun') }}</span>
             </div>
 
             <p v-if="destination.check_enabled && !destination.retention_agent_id" class="text-xs text-destructive">
-                No maintenance agent is assigned, so scheduled checks cannot run. Edit the destination to choose one.
+                {{ t('destinationDetail.noMaintenanceAgent') }}
             </p>
         </div>
 
         <!-- ── Recent Jobs (backups + retention runs) ─────────────────────── -->
         <div class="flex flex-col gap-3">
             <div class="flex items-center justify-between">
-                <h2 class="text-sm font-semibold">Recent Jobs</h2>
+                <h2 class="text-sm font-semibold">{{ t('destinationDetail.recentJobs') }}</h2>
                 <Button variant="ghost" size="icon" class="w-7 h-7" :disabled="jobsLoading" @click="fetchJobs">
                     <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': jobsLoading }" />
                 </Button>
@@ -478,10 +467,10 @@ onMounted(() => Promise.all([fetchDestination(), fetchJobs()]))
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Type</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Started</TableHead>
-                            <TableHead>Finished</TableHead>
+                            <TableHead>{{ t('destinationDetail.colType') }}</TableHead>
+                            <TableHead>{{ t('destinationDetail.colStatus') }}</TableHead>
+                            <TableHead>{{ t('destinationDetail.colStarted') }}</TableHead>
+                            <TableHead>{{ t('destinationDetail.colFinished') }}</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -503,9 +492,9 @@ onMounted(() => Promise.all([fetchDestination(), fetchJobs()]))
                                             <CalendarClock class="w-6 h-6 text-muted-foreground" />
                                         </div>
                                         <div>
-                                            <p class="font-medium text-sm">No jobs yet</p>
+                                            <p class="font-medium text-sm">{{ t('destinationDetail.noJobs') }}</p>
                                             <p class="mt-1 text-xs text-muted-foreground">
-                                                Backups and retention sweeps against this destination will appear here.
+                                                {{ t('destinationDetail.noJobsDetail') }}
                                             </p>
                                         </div>
                                     </div>
@@ -517,7 +506,7 @@ onMounted(() => Promise.all([fetchDestination(), fetchJobs()]))
                         <template v-else>
                             <TableRow v-for="job in jobs" :key="job.id" class="cursor-pointer"
                                 @click="router.push(`/jobs/${job.id}`)">
-                                <TableCell class="text-sm text-muted-foreground capitalize">{{ job.type }}</TableCell>
+                                <TableCell class="text-sm text-muted-foreground">{{ jobTypeLabel(job.type) }}</TableCell>
                                 <TableCell>
                                     <Badge :variant="statusVariant(job.status)" :class="statusClass(job.status)">
                                         {{ statusLabel(job.status) }}
@@ -538,7 +527,7 @@ onMounted(() => Promise.all([fetchDestination(), fetchJobs()]))
                         :to="{ name: 'jobs', query: { destination_id: destinationId } }"
                         class="text-sm text-muted-foreground hover:text-foreground transition-colors"
                     >
-                        View all jobs →
+                        {{ t('destinationDetail.viewAllJobs') }}
                     </RouterLink>
                 </div>
             </div>
@@ -554,23 +543,18 @@ onMounted(() => Promise.all([fetchDestination(), fetchJobs()]))
     <AlertDialog :open="resetRepoDialogOpen" @update:open="resetRepoDialogOpen = $event">
         <AlertDialogContent>
             <AlertDialogHeader>
-                <AlertDialogTitle>Start a new repository?</AlertDialogTitle>
+                <AlertDialogTitle>{{ t('destinationDetail.resetTitle') }}</AlertDialogTitle>
                 <AlertDialogDescription>
                     <span v-if="destination">
-                        Backups have already been written to <strong>{{ destination.name }}</strong>, so
-                        Arkeep does not create its repository again: if the storage is missing, for example
-                        a disk that is not mounted, backups fail instead of starting over in an empty folder.
-                        Continue only if you replaced the storage on purpose. The next backup will create a new,
-                        empty repository at the same location, and snapshots that are not in it will leave the
-                        snapshot list. Nothing on the storage is deleted.
+                        {{ t('destinationDetail.resetBody', { name: destination.name }) }}
                     </span>
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-                <AlertDialogCancel :disabled="resetRepoLoading">Cancel</AlertDialogCancel>
+                <AlertDialogCancel :disabled="resetRepoLoading">{{ t('common.cancel') }}</AlertDialogCancel>
                 <AlertDialogAction data-testid="confirm-reset-repository" :disabled="resetRepoLoading"
                     @click="confirmResetRepository">
-                    {{ resetRepoLoading ? 'Resetting…' : 'Start new repository' }}
+                    {{ resetRepoLoading ? t('destinationDetail.resetting') : t('destinationDetail.startNewRepository') }}
                 </AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
@@ -580,22 +564,18 @@ onMounted(() => Promise.all([fetchDestination(), fetchJobs()]))
     <AlertDialog :open="deleteDialogOpen" @update:open="deleteDialogOpen = $event">
         <AlertDialogContent>
             <AlertDialogHeader>
-                <AlertDialogTitle>Delete destination?</AlertDialogTitle>
+                <AlertDialogTitle>{{ t('destinations.deleteTitle') }}</AlertDialogTitle>
                 <AlertDialogDescription>
                     <span v-if="destination">
-                        <strong>{{ destination.name }}</strong> will be deleted and its stored credentials erased.
-                        Its existing snapshots stay listed, but restoring one will require entering
-                        the destination's credentials again; browsing and downloading them will no longer be possible.
-                        The backup data on the storage is not touched.
-                        This action cannot be undone.
+                        {{ t('destinations.deleteBody', { name: destination.name }) }}
                     </span>
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-                <AlertDialogCancel :disabled="deleteLoading">Cancel</AlertDialogCancel>
+                <AlertDialogCancel :disabled="deleteLoading">{{ t('common.cancel') }}</AlertDialogCancel>
                 <AlertDialogAction class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                     :disabled="deleteLoading" @click="confirmDelete">
-                    {{ deleteLoading ? 'Deleting…' : 'Delete' }}
+                    {{ deleteLoading ? t('destinations.deleting') : t('common.delete') }}
                 </AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>

@@ -7,6 +7,7 @@
 // `password-change` with a new challenge when the account must first set a
 // new password, and `back` when the user returns to the credentials step.
 import { computed, nextTick, ref, useTemplateRef } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useForm, useField } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
 import { z } from 'zod'
@@ -35,6 +36,8 @@ const emit = defineEmits<{
 
 // ─── Validation schema ────────────────────────────────────────────────────────
 
+const { t } = useI18n()
+
 // Only the field of the selected method is checked.
 const schema = toTypedSchema(
     z.object({
@@ -44,15 +47,15 @@ const schema = toTypedSchema(
     }).superRefine((data, ctx) => {
         if (data.useRecoveryCode) {
             if (!data.recoveryCode.trim()) {
-                ctx.addIssue({ code: 'custom', path: ['recoveryCode'], message: 'Enter your recovery code' })
+                ctx.addIssue({ code: 'custom', path: ['recoveryCode'], message: t('twoFactorCodeForm.validation.enterRecovery') })
             }
             return
         }
         const code = data.pin.join('')
         if (!code) {
-            ctx.addIssue({ code: 'custom', path: ['pin'], message: 'Enter the 6-digit code' })
+            ctx.addIssue({ code: 'custom', path: ['pin'], message: t('twoFactorCodeForm.validation.enterCode') })
         } else if (code.length !== 6) {
-            ctx.addIssue({ code: 'custom', path: ['pin'], message: 'Enter all 6 digits' })
+            ctx.addIssue({ code: 'custom', path: ['pin'], message: t('twoFactorCodeForm.validation.enterAll6') })
         }
     }),
 )
@@ -82,8 +85,8 @@ const formEl = useTemplateRef<HTMLFormElement>('form')
 const verifying = ref(false)
 
 const description = computed(() => useRecoveryCode.value
-    ? 'Enter one of your recovery codes'
-    : 'Enter the 6-digit code from your authenticator app')
+    ? t('twoFactorCodeForm.recoveryDescription')
+    : t('twoFactorCodeForm.totpDescription'))
 
 // ─── Handlers ─────────────────────────────────────────────────────────────────
 
@@ -101,10 +104,10 @@ const onSubmit = handleSubmit(async (values) => {
     } catch {
         verifying.value = false
         if (values.useRecoveryCode) {
-            serverError.value = 'Invalid or already-used recovery code'
+            serverError.value = t('twoFactorCodeForm.invalidRecovery')
             return
         }
-        serverError.value = 'Invalid or expired code'
+        serverError.value = t('twoFactorCodeForm.invalidCode')
         // Clear the rejected code and put the cursor back on the first digit.
         pinValue.value = []
         await nextTick()
@@ -125,7 +128,7 @@ function toggleMethod(): void {
         <FieldGroup>
             <!-- Title -->
             <div class="flex flex-col items-center gap-2 text-center">
-                <h1 class="text-2xl font-bold">Two-factor authentication</h1>
+                <h1 class="text-2xl font-bold">{{ t('twoFactorCodeForm.title') }}</h1>
                 <p class="text-sm text-muted-foreground text-balance">{{ description }}</p>
             </div>
 
@@ -152,7 +155,7 @@ function toggleMethod(): void {
 
             <!-- Recovery code -->
             <Field v-else>
-                <FieldLabel for="recovery-code">Recovery code</FieldLabel>
+                <FieldLabel for="recovery-code">{{ t('twoFactorCodeForm.recoveryCode') }}</FieldLabel>
                 <Input id="recovery-code" v-model="recoveryCodeValue" type="text"
                     placeholder="XXXX-XXXX-XXXX-XXXX" autocomplete="one-time-code" autofocus
                     spellcheck="false" :disabled="verifying"
@@ -164,7 +167,7 @@ function toggleMethod(): void {
             <Field>
                 <Button type="submit" class="w-full" :disabled="isSubmitting || verifying">
                     <Loader2 v-if="isSubmitting || verifying" class="size-4 animate-spin" />
-                    {{ isSubmitting || verifying ? 'Verifying…' : 'Verify' }}
+                    {{ isSubmitting || verifying ? t('twoFactorCodeForm.verifying') : t('twoFactorCodeForm.verify') }}
                 </Button>
             </Field>
 
@@ -172,7 +175,7 @@ function toggleMethod(): void {
             <button type="button" :disabled="verifying"
                 class="text-sm text-muted-foreground hover:text-foreground disabled:pointer-events-none disabled:opacity-50 hover:underline"
                 @click="toggleMethod">
-                {{ useRecoveryCode ? 'Use your authenticator app instead' : 'Use a recovery code instead' }}
+                {{ useRecoveryCode ? t('twoFactorCodeForm.useTotp') : t('twoFactorCodeForm.useRecovery') }}
             </button>
 
             <!-- Back to sign in -->
@@ -180,7 +183,7 @@ function toggleMethod(): void {
                 class="inline-flex items-center justify-center gap-1 text-sm text-muted-foreground hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
                 @click="emit('back')">
                 <ArrowLeft class="size-4" />
-                Back to sign in
+                {{ t('twoFactorCodeForm.backToSignIn') }}
             </button>
         </FieldGroup>
     </form>

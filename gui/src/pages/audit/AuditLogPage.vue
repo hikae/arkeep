@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
     Table,
     TableBody,
@@ -29,6 +30,7 @@ import type { ApiResponse, AuditLog } from '@/types'
 // ---------------------------------------------------------------------------
 
 const entries = ref<AuditLog[]>([])
+const { t, locale } = useI18n()
 const total = ref(0)
 const loading = ref(true)
 const error = ref<string | null>(null)
@@ -50,16 +52,16 @@ const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize))
 // Action groups for the filter select
 // ---------------------------------------------------------------------------
 
-const ACTION_OPTIONS = [
-    { value: 'all',           label: 'All actions' },
-    { value: 'auth.',         label: 'Auth (login / logout)' },
-    { value: 'policy.',       label: 'Policies' },
-    { value: 'snapshot.',     label: 'Snapshots' },
-    { value: 'agent.',        label: 'Agents' },
-    { value: 'destination.',  label: 'Destinations' },
-    { value: 'user.',         label: 'Users' },
-    { value: 'settings.',     label: 'Settings' },
-]
+const ACTION_OPTIONS = computed(() => [
+    { value: 'all',           label: t('audit.allActions') },
+    { value: 'auth.',         label: t('audit.auth') },
+    { value: 'policy.',       label: t('audit.policies') },
+    { value: 'snapshot.',     label: t('audit.snapshots') },
+    { value: 'agent.',        label: t('audit.agents') },
+    { value: 'destination.',  label: t('audit.destinations') },
+    { value: 'user.',         label: t('audit.users') },
+    { value: 'settings.',     label: t('audit.settings') },
+])
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -78,7 +80,7 @@ function actionBadgeClass(action: string): string {
 }
 
 function formatDate(iso: string): string {
-    return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+    return new Date(iso).toLocaleString(locale.value, { dateStyle: 'medium', timeStyle: 'short' })
 }
 
 // Abbreviate a UUID for display: show first 8 chars followed by ellipsis.
@@ -129,7 +131,7 @@ async function fetchEntries() {
         entries.value = res.data.items
         total.value = res.data.total
     } catch (e: any) {
-        error.value = apiErrorMessage(e, 'Failed to load audit log.')
+        error.value = apiErrorMessage(e, t('audit.loadFailed'))
     } finally {
         loading.value = false
     }
@@ -159,12 +161,12 @@ onMounted(fetchEntries)
         <!-- Page header -->
         <div class="flex items-center justify-between">
             <div>
-                <h1 class="text-2xl font-semibold tracking-tight">Audit Log</h1>
+                <h1 class="text-2xl font-semibold tracking-tight">{{ t('audit.title') }}</h1>
                 <p class="mt-1 text-sm text-muted-foreground">
-                    Record of all significant admin actions.
+                    {{ t('audit.subtitle') }}
                 </p>
             </div>
-            <Button variant="outline" size="icon" aria-label="Refresh" :disabled="loading" @click="fetchEntries">
+            <Button variant="outline" size="icon" :aria-label="t('common.refresh')" :disabled="loading" @click="fetchEntries">
                 <RefreshCw class="w-4 h-4" :class="{ 'animate-spin': loading }" />
             </Button>
         </div>
@@ -178,7 +180,7 @@ onMounted(fetchEntries)
         <div class="flex items-center gap-3 flex-wrap">
             <Select v-model="actionFilter">
                 <SelectTrigger class="w-52">
-                    <SelectValue placeholder="All actions" />
+                    <SelectValue :placeholder="t('audit.allActions')" />
                 </SelectTrigger>
                 <SelectContent>
                     <SelectItem v-for="opt in ACTION_OPTIONS" :key="opt.value" :value="opt.value">
@@ -189,12 +191,12 @@ onMounted(fetchEntries)
 
             <Input
                 v-model="emailFilter"
-                placeholder="Filter by user email…"
+                :placeholder="t('audit.filterEmail')"
                 class="w-60"
             />
 
             <span v-if="!loading" class="text-sm text-muted-foreground ml-auto">
-                {{ total }} event{{ total !== 1 ? 's' : '' }}
+                {{ t('audit.count', total, { named: { n: total } }) }}
             </span>
         </div>
 
@@ -203,11 +205,11 @@ onMounted(fetchEntries)
             <Table>
                 <TableHeader>
                     <TableRow>
-                        <TableHead class="w-40">Timestamp</TableHead>
-                        <TableHead>User</TableHead>
-                        <TableHead class="w-48">Action</TableHead>
-                        <TableHead>Resource</TableHead>
-                        <TableHead class="w-32">IP</TableHead>
+                        <TableHead class="w-40">{{ t('audit.colTimestamp') }}</TableHead>
+                        <TableHead>{{ t('audit.colUser') }}</TableHead>
+                        <TableHead class="w-48">{{ t('audit.colAction') }}</TableHead>
+                        <TableHead>{{ t('audit.colResource') }}</TableHead>
+                        <TableHead class="w-32">{{ t('audit.colIp') }}</TableHead>
                         <TableHead class="w-10"></TableHead>
                     </TableRow>
                 </TableHeader>
@@ -231,9 +233,9 @@ onMounted(fetchEntries)
                                         <ScrollText class="w-10 h-10 text-muted-foreground" />
                                     </div>
                                     <div>
-                                        <p class="font-medium">No audit events yet</p>
+                                        <p class="font-medium">{{ t('audit.empty') }}</p>
                                         <p class="mt-1 text-sm text-muted-foreground">
-                                            Admin actions will be recorded here automatically.
+                                            {{ t('audit.emptyDetail') }}
                                         </p>
                                     </div>
                                 </div>
@@ -287,7 +289,7 @@ onMounted(fetchEntries)
         <!-- Pagination -->
         <div v-if="totalPages > 1" class="flex items-center justify-between">
             <span class="text-sm text-muted-foreground">
-                Page {{ page }} of {{ totalPages }}
+                {{ t('audit.pageOf', { page, total: totalPages }) }}
             </span>
             <div class="flex items-center gap-2">
                 <Button variant="outline" size="icon" :disabled="page <= 1 || loading" @click="page--">

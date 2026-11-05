@@ -78,13 +78,13 @@ const routes: RouteRecordRaw[] = [
         path: 'dashboard',
         name: 'dashboard',
         component: () => import('@/pages/dashboard/DashboardPage.vue'),
-        meta: { breadcrumb: 'Dashboard' },
+        meta: { breadcrumb: 'nav.dashboard' },
       },
 
       // Agents
       {
         path: 'agents',
-        meta: { breadcrumb: 'Agents' },
+        meta: { breadcrumb: 'nav.agents' },
         children: [
           {
             path: '',
@@ -96,7 +96,7 @@ const routes: RouteRecordRaw[] = [
             name: 'agent-detail',
             component: () => import('@/pages/agents/AgentDetailPage.vue'),
             props: true,
-            meta: { breadcrumb: 'Agent Details' },
+            meta: { breadcrumb: 'nav.agentDetails' },
           },
         ],
       },
@@ -104,7 +104,7 @@ const routes: RouteRecordRaw[] = [
       // Policies
       {
         path: 'policies',
-        meta: { breadcrumb: 'Policies' },
+        meta: { breadcrumb: 'nav.policies' },
         children: [
           {
             path: '',
@@ -116,7 +116,7 @@ const routes: RouteRecordRaw[] = [
             name: 'policy-detail',
             component: () => import('@/pages/policies/PolicyDetailPage.vue'),
             props: true,
-            meta: { breadcrumb: 'Policy Details' },
+            meta: { breadcrumb: 'nav.policyDetails' },
           },
         ],
       },
@@ -124,7 +124,7 @@ const routes: RouteRecordRaw[] = [
       // Destinations
       {
         path: 'destinations',
-        meta: { breadcrumb: 'Destinations' },
+        meta: { breadcrumb: 'nav.destinations' },
         children: [
           {
             path: '',
@@ -136,7 +136,7 @@ const routes: RouteRecordRaw[] = [
             name: 'destination-detail',
             component: () => import('@/pages/destinations/DestinationDetailPage.vue'),
             props: true,
-            meta: { breadcrumb: 'Destination Details' },
+            meta: { breadcrumb: 'nav.destinationDetails' },
           },
         ],
       },
@@ -144,7 +144,7 @@ const routes: RouteRecordRaw[] = [
       // Snapshots
       {
         path: 'snapshots',
-        meta: { breadcrumb: 'Snapshots' },
+        meta: { breadcrumb: 'nav.snapshots' },
         children: [
           {
             path: '',
@@ -157,7 +157,7 @@ const routes: RouteRecordRaw[] = [
             component: () => import('@/pages/snapshots/SnapshotBrowsePage.vue'),
             // Browsing makes an agent open the repository, so the server
             // reserves it to admins.
-            meta: { breadcrumb: 'Browse', requiresRole: 'admin' },
+            meta: { breadcrumb: 'nav.browse', requiresRole: 'admin' },
           },
         ],
       },
@@ -165,7 +165,7 @@ const routes: RouteRecordRaw[] = [
       // Jobs
       {
         path: 'jobs',
-        meta: { breadcrumb: 'Jobs' },
+        meta: { breadcrumb: 'nav.jobs' },
         children: [
           {
             path: '',
@@ -177,7 +177,7 @@ const routes: RouteRecordRaw[] = [
             name: 'job-detail',
             component: () => import('@/pages/jobs/JobDetailPage.vue'),
             props: true,
-            meta: { breadcrumb: 'Job Details' },
+            meta: { breadcrumb: 'nav.jobDetails' },
           },
         ],
       },
@@ -187,14 +187,14 @@ const routes: RouteRecordRaw[] = [
         path: 'users',
         name: 'users',
         component: () => import('@/pages/users/UsersPage.vue'),
-        meta: { breadcrumb: 'Users', requiresRole: 'admin' },
+        meta: { breadcrumb: 'nav.users', requiresRole: 'admin' },
       },
 
       // Settings — layout shell with OIDC + SMTP sub-pages, admin only
       {
         path: 'settings',
         component: () => import('@/pages/settings/SettingsPage.vue'),
-        meta: { breadcrumb: 'Settings', requiresRole: 'admin' },
+        meta: { breadcrumb: 'nav.settings', requiresRole: 'admin' },
         children: [
           {
             path: '',
@@ -204,37 +204,37 @@ const routes: RouteRecordRaw[] = [
             path: 'oidc',
             name: 'settings-oidc',
             component: () => import('@/pages/settings/OIDCPage.vue'),
-            meta: { breadcrumb: 'OpenID Connect', requiresRole: 'admin' },
+            meta: { breadcrumb: 'nav.openidConnect', requiresRole: 'admin' },
           },
           {
             path: 'smtp',
             name: 'settings-smtp',
             component: () => import('@/pages/settings/SMTPPage.vue'),
-            meta: { breadcrumb: 'SMTP', requiresRole: 'admin' },
+            meta: { breadcrumb: 'nav.smtp', requiresRole: 'admin' },
           },
           {
             path: 'notifications',
             name: 'settings-notifications',
             component: () => import('@/pages/settings/NotificationsPage.vue'),
-            meta: { breadcrumb: 'Notifications', requiresRole: 'admin' },
+            meta: { breadcrumb: 'nav.notifications', requiresRole: 'admin' },
           },
           {
             path: 'logs',
             name: 'settings-logs',
             component: () => import('@/pages/settings/LogRetentionPage.vue'),
-            meta: { breadcrumb: 'Log Retention', requiresRole: 'admin' },
+            meta: { breadcrumb: 'nav.logRetention', requiresRole: 'admin' },
           },
           {
             path: 'jobs-queue',
             name: 'settings-jobs-queue',
             component: () => import('@/pages/settings/JobQueuePage.vue'),
-            meta: { breadcrumb: 'Job Queue', requiresRole: 'admin' },
+            meta: { breadcrumb: 'nav.jobQueue', requiresRole: 'admin' },
           },
           {
             path: 'snapshot-sync',
             name: 'settings-snapshot-sync',
             component: () => import('@/pages/settings/SnapshotSyncPage.vue'),
-            meta: { breadcrumb: 'Snapshot Sync', requiresRole: 'admin' },
+            meta: { breadcrumb: 'nav.snapshotSync', requiresRole: 'admin' },
           },
         ],
       },
@@ -244,7 +244,7 @@ const routes: RouteRecordRaw[] = [
         path: 'audit',
         name: 'audit',
         component: () => import('@/pages/audit/AuditLogPage.vue'),
-        meta: { breadcrumb: 'Audit Log', requiresRole: 'admin' },
+        meta: { breadcrumb: 'nav.auditLog', requiresRole: 'admin' },
       },
 
       // Profile — accessible to all authenticated users
@@ -252,7 +252,7 @@ const routes: RouteRecordRaw[] = [
         path: 'profile',
         name: 'profile',
         component: () => import('@/pages/users/ProfilePage.vue'),
-        meta: { breadcrumb: 'Profile' },
+        meta: { breadcrumb: 'nav.profile' },
       },
     ],
   },
@@ -282,18 +282,6 @@ export const router = createRouter({
     // Restore scroll position on browser back/forward; scroll to top otherwise
     return savedPosition ?? { top: 0 }
   },
-})
-
-// ─── Title update ─────────────────────────────────────────────────────────────
-
-router.afterEach((to) => {
-  const breadcrumbs = to.matched
-    .map((r) => r.meta.breadcrumb as string | undefined)
-    .filter(Boolean) as string[]
-
-  document.title = breadcrumbs.length > 0
-    ? `Arkeep | ${breadcrumbs[breadcrumbs.length - 1]}`
-    : 'Arkeep'
 })
 
 // ─── Navigation guard ─────────────────────────────────────────────────────────

@@ -29,6 +29,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { useAuthStore } from "@/stores/auth"
 import { useUpdateStore } from "@/stores/update"
 import { computed, onMounted } from "vue"
+import { useI18n } from "vue-i18n"
 
 interface NavSection {
     title: string
@@ -44,6 +45,7 @@ interface NavItem {
 
 const auth = useAuthStore();
 const updateStore = useUpdateStore();
+const { t } = useI18n();
 
 onMounted(() => updateStore.fetch())
 
@@ -54,32 +56,32 @@ const props = withDefaults(defineProps<SidebarProps>(), {
 
 const nav: NavSection[] = [
     {
-        title: 'Overview',
+        title: 'nav.sections.overview',
         items: [
-            { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
+            { title: 'nav.dashboard', url: '/dashboard', icon: LayoutDashboard },
         ],
     },
     {
-        title: 'Infrastructure',
+        title: 'nav.sections.infrastructure',
         items: [
-            { title: 'Agents', url: '/agents', icon: Server },
-            { title: 'Policies', url: '/policies', icon: Shield },
-            { title: 'Destinations', url: '/destinations', icon: HardDrive },
+            { title: 'nav.agents', url: '/agents', icon: Server },
+            { title: 'nav.policies', url: '/policies', icon: Shield },
+            { title: 'nav.destinations', url: '/destinations', icon: HardDrive },
         ],
     },
     {
-        title: 'Data',
+        title: 'nav.sections.data',
         items: [
-            { title: 'Snapshots', url: '/snapshots', icon: Archive },
-            { title: 'Jobs', url: '/jobs', icon: ClipboardList },
+            { title: 'nav.snapshots', url: '/snapshots', icon: Archive },
+            { title: 'nav.jobs', url: '/jobs', icon: ClipboardList },
         ],
     },
     {
-        title: 'Operations',
+        title: 'nav.sections.operations',
         items: [
-            { title: 'Users', url: '/users', icon: Users, adminOnly: true },
-            { title: 'Settings', url: '/settings', icon: Settings, adminOnly: true },
-            { title: 'Audit Log', url: '/audit', icon: ScrollText, adminOnly: true },
+            { title: 'nav.users', url: '/users', icon: Users, adminOnly: true },
+            { title: 'nav.settings', url: '/settings', icon: Settings, adminOnly: true },
+            { title: 'nav.auditLog', url: '/audit', icon: ScrollText, adminOnly: true },
         ],
     },
 ]
@@ -134,9 +136,9 @@ const userInitials = computed(() =>
                 <Card class="py-2">
                     <CardContent class="px-3">
                         <div class="flex items-center justify-between text-xs">
-                            <span class="text-muted-foreground">Server</span>
+                            <span class="text-muted-foreground">{{ t('common.server') }}</span>
                             <div class="flex gap-1.5">
-                                {{ updateStore.serverVersion ? `v${updateStore.serverVersion}` : 'Version not available'
+                                {{ updateStore.serverVersion ? `v${updateStore.serverVersion}` : t('common.versionNotAvailable')
                                 }}
                                 <UpgradeIndicator :show="updateStore.updateAvailable"
                                     :version="updateStore.latestVersion" tooltip-side="top" />

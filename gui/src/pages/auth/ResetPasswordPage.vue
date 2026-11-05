@@ -10,6 +10,7 @@
 
 import { computed, ref } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useForm, useField } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
 import { z } from 'zod'
@@ -27,17 +28,22 @@ import {
 import { Input } from '@/components/ui/input'
 import { AlertCircle, ArrowLeft, CheckCircle2, Eye, EyeOff, Loader2, Moon, Sun } from '@lucide/vue'
 import { useTheme } from '@/composables/useTheme'
+import LocaleToggle from '@/components/shared/LocaleToggle.vue'
+
+const { t } = useI18n()
 
 // ─── Validation schema ────────────────────────────────────────────────────────
 
-const schema = toTypedSchema(
-    z.object({
-        password: passwordSchema,
-        confirmPassword: z.string().min(1, 'Please confirm your password'),
-    }).refine((data) => data.password === data.confirmPassword, {
-        message: 'Passwords do not match',
-        path: ['confirmPassword'],
-    }),
+const schema = computed(() =>
+    toTypedSchema(
+        z.object({
+            password: passwordSchema(),
+            confirmPassword: z.string().min(1, t('validation.confirmPasswordRequired')),
+        }).refine((data) => data.password === data.confirmPassword, {
+            message: t('validation.passwordsDoNotMatch'),
+            path: ['confirmPassword'],
+        }),
+    ),
 )
 
 // Fields start empty rather than undefined, so an untouched field fails with
@@ -77,8 +83,8 @@ const onSubmit = handleSubmit(async (values) => {
         // The most common failure is an invalid/expired token (400). Surface a
         // clear message with a path to request a fresh link.
         serverError.value = err?.status === 400 || err?.response?.status === 400
-            ? 'This reset link is invalid or has expired. Request a new one.'
-            : 'Something went wrong. Please try again later.'
+            ? t('auth.resetPassword.errorInvalidToken')
+            : t('auth.errorGeneric')
     }
 })
 </script>
@@ -96,13 +102,16 @@ const onSubmit = handleSubmit(async (values) => {
             maskImage: 'radial-gradient(ellipse 60% 60% at 50% 50%, #000 30%, transparent 70%)',
         }" />
 
-        <!-- Theme toggle -->
-        <Button variant="ghost" size="icon"
-            class="absolute z-10 top-4 right-4 text-muted-foreground hover:text-foreground" :aria-label="modeLabel"
-            @click="cycle()">
-            <Sun v-if="isDark" class="size-4" />
-            <Moon v-else class="size-4" />
-        </Button>
+        <!-- Theme and language toggles -->
+        <div class="absolute z-10 top-4 right-4 flex items-center gap-2">
+            <LocaleToggle />
+            <Button variant="ghost" size="icon"
+                class="text-muted-foreground hover:text-foreground" :aria-label="modeLabel"
+                @click="cycle()">
+                <Sun v-if="isDark" class="size-4" />
+                <Moon v-else class="size-4" />
+            </Button>
+        </div>
 
         <div class="relative z-10 w-full max-w-sm">
             <Card>
@@ -110,9 +119,9 @@ const onSubmit = handleSubmit(async (values) => {
                     <FieldGroup>
                         <!-- Title -->
                         <div class="flex flex-col items-center gap-2 text-center">
-                            <h1 class="text-2xl font-bold">Reset password</h1>
+                            <h1 class="text-2xl font-bold">{{ t('auth.resetPassword.title') }}</h1>
                             <p class="text-sm text-muted-foreground text-balance">
-                                Choose a new password for your Arkeep account
+                                {{ t('auth.resetPassword.subtitle') }}
                             </p>
                         </div>
 
@@ -121,13 +130,13 @@ const onSubmit = handleSubmit(async (values) => {
                             <Alert variant="destructive">
                                 <AlertCircle class="size-4" />
                                 <AlertDescription>
-                                    This reset link is invalid. Please request a new one.
+                                    {{ t('auth.resetPassword.invalidLink') }}
                                 </AlertDescription>
                             </Alert>
                             <RouterLink to="/auth/forgot-password"
                                 class="inline-flex items-center justify-center gap-1 text-sm text-muted-foreground hover:text-foreground">
                                 <ArrowLeft class="size-4" />
-                                Request a new link
+                                {{ t('auth.resetPassword.requestNewLink') }}
                             </RouterLink>
                         </template>
 
@@ -136,12 +145,11 @@ const onSubmit = handleSubmit(async (values) => {
                             <Alert>
                                 <CheckCircle2 class="size-4" />
                                 <AlertDescription>
-                                    Your password has been updated. You can now sign in with your
-                                    new password.
+                                    {{ t('auth.resetPassword.success') }}
                                 </AlertDescription>
                             </Alert>
                             <Button as-child class="w-full">
-                                <RouterLink to="/login">Back to login</RouterLink>
+                                <RouterLink to="/login">{{ t('auth.resetPassword.backToLogin') }}</RouterLink>
                             </Button>
                         </template>
 
@@ -161,7 +169,7 @@ const onSubmit = handleSubmit(async (values) => {
 
                                 <!-- Password -->
                                 <Field>
-                                    <FieldLabel for="password">New password</FieldLabel>
+                                    <FieldLabel for="password">{{ t('auth.resetPassword.newPassword') }}</FieldLabel>
                                     <div class="relative">
                                         <Input id="password" v-model="passwordValue"
                                             :type="showPassword ? 'text' : 'password'" placeholder="••••••••"
@@ -169,7 +177,7 @@ const onSubmit = handleSubmit(async (values) => {
                                             :class="passwordError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                                         <button type="button"
                                             class="absolute transition-colors -translate-y-1/2 right-3 top-1/2 text-muted-foreground hover:text-foreground"
-                                            :aria-label="showPassword ? 'Hide password' : 'Show password'"
+                                            :aria-label="showPassword ? t('auth.hidePassword') : t('auth.showPassword')"
                                             @click="showPassword = !showPassword">
                                             <EyeOff v-if="showPassword" class="size-4" />
                                             <Eye v-else class="size-4" />
@@ -180,7 +188,7 @@ const onSubmit = handleSubmit(async (values) => {
 
                                 <!-- Confirm password -->
                                 <Field>
-                                    <FieldLabel for="confirmPassword">Confirm new password</FieldLabel>
+                                    <FieldLabel for="confirmPassword">{{ t('auth.resetPassword.confirmNewPassword') }}</FieldLabel>
                                     <div class="relative">
                                         <Input id="confirmPassword" v-model="confirmPasswordValue"
                                             :type="showConfirmPassword ? 'text' : 'password'" placeholder="••••••••"
@@ -188,7 +196,7 @@ const onSubmit = handleSubmit(async (values) => {
                                             :class="confirmPasswordError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                                         <button type="button"
                                             class="absolute transition-colors -translate-y-1/2 right-3 top-1/2 text-muted-foreground hover:text-foreground"
-                                            :aria-label="showConfirmPassword ? 'Hide password' : 'Show password'"
+                                            :aria-label="showConfirmPassword ? t('auth.hidePassword') : t('auth.showPassword')"
                                             @click="showConfirmPassword = !showConfirmPassword">
                                             <EyeOff v-if="showConfirmPassword" class="size-4" />
                                             <Eye v-else class="size-4" />
@@ -201,7 +209,7 @@ const onSubmit = handleSubmit(async (values) => {
                                 <Field>
                                     <Button type="submit" class="w-full" :disabled="isSubmitting">
                                         <Loader2 v-if="isSubmitting" class="size-4 animate-spin" />
-                                        {{ isSubmitting ? 'Updating…' : 'Update password' }}
+                                        {{ isSubmitting ? t('auth.resetPassword.updating') : t('auth.resetPassword.updatePassword') }}
                                     </Button>
                                 </Field>
 
@@ -209,7 +217,7 @@ const onSubmit = handleSubmit(async (values) => {
                                 <RouterLink to="/login"
                                     class="inline-flex items-center justify-center gap-1 text-sm text-muted-foreground hover:text-foreground">
                                     <ArrowLeft class="size-4" />
-                                    Back to login
+                                    {{ t('auth.resetPassword.backToLogin') }}
                                 </RouterLink>
                             </FieldGroup>
                         </form>
@@ -221,6 +229,6 @@ const onSubmit = handleSubmit(async (values) => {
 
     <!-- Footer -->
     <p class="fixed bottom-0 left-0 right-0 text-center text-xs text-muted-foreground pb-6">
-        Arkeep — open source backup management
+        {{ t('auth.footer') }}
     </p>
 </template>

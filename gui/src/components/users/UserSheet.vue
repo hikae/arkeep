@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useForm, useField } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
 import { z } from 'zod'
@@ -42,6 +43,7 @@ const emit = defineEmits<{
 // ---------------------------------------------------------------------------
 
 const isEdit = computed(() => props.user !== null)
+const { t } = useI18n()
 
 // ---------------------------------------------------------------------------
 // Form
@@ -51,24 +53,32 @@ const isEdit = computed(() => props.user !== null)
 // read-only and the password is changed by the user from the Profile page.
 const roleSchema = z.enum(['admin', 'user'])
 
-const createSchema = z.object({
-    email: z.email('Must be a valid email address'),
-    display_name: z.string().min(1, 'Display name is required'),
-    password: passwordSchema,
-    role: roleSchema,
-    is_active: z.boolean(),
-})
+function createSchema() {
+    return z.object({
+        email: z.email({ error: () => t('userSheet.validation.emailInvalid') }),
+        display_name: z.string().min(1, { error: () => t('userSheet.validation.displayNameRequired') }),
+        password: passwordSchema(),
+        role: roleSchema,
+        is_active: z.boolean(),
+    })
+}
 
-const editSchema = z.object({
-    email: z.string(),
-    display_name: z.string().min(1, 'Display name is required'),
-    password: z.string(),
-    role: roleSchema,
-    is_active: z.boolean(),
-})
+function editSchema() {
+    return z.object({
+        email: z.string(),
+        display_name: z.string().min(1, { error: () => t('userSheet.validation.displayNameRequired') }),
+        password: z.string(),
+        role: roleSchema,
+        is_active: z.boolean(),
+    })
+}
+
+const validationSchema = computed(() =>
+    toTypedSchema(isEdit.value ? editSchema() : createSchema()),
+)
 
 const { handleSubmit, resetForm, isSubmitting } = useForm({
-    validationSchema: computed(() => toTypedSchema(isEdit.value ? editSchema : createSchema)),
+    validationSchema,
     initialValues: formValues(),
 })
 
@@ -142,7 +152,7 @@ const onSubmit = handleSubmit(async (values) => {
         emit('update:open', false)
         emit('saved')
     } catch (e: any) {
-        submitError.value = apiErrorMessage(e, 'Failed to save user.')
+        submitError.value = apiErrorMessage(e, t('userSheet.saveFailed'))
     }
 })
 </script>
@@ -151,9 +161,9 @@ const onSubmit = handleSubmit(async (values) => {
     <Sheet :open="open" @update:open="onOpenChange">
         <SheetContent class="sm:max-w-md overflow-y-auto">
             <SheetHeader>
-                <SheetTitle>{{ isEdit ? 'Edit User' : 'New User' }}</SheetTitle>
+                <SheetTitle>{{ isEdit ? t('userSheet.editTitle') : t('userSheet.newTitle') }}</SheetTitle>
                 <SheetDescription>
-                    {{ isEdit ? 'Update account details and access level.' : 'Create a new local user account.' }}
+                    {{ isEdit ? t('userSheet.editDescription') : t('userSheet.newDescription') }}
                 </SheetDescription>
             </SheetHeader>
 
@@ -172,8 +182,8 @@ const onSubmit = handleSubmit(async (values) => {
 
                     <!-- Email — create only -->
                     <Field v-if="!isEdit">
-                        <FieldLabel for="user-email">Email</FieldLabel>
-                        <Input id="user-email" v-model="fieldEmail" type="email" placeholder="user@example.com"
+                        <FieldLabel for="user-email">{{ t('userSheet.email') }}</FieldLabel>
+                        <Input id="user-email" v-model="fieldEmail" type="email" :placeholder="t('userSheet.emailPlaceholder')"
                             autocomplete="off"
                             :class="emailError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                         <FieldError v-if="emailError">{{ emailError }}</FieldError>
@@ -181,14 +191,14 @@ const onSubmit = handleSubmit(async (values) => {
 
                     <!-- Email read-only in edit mode -->
                     <div v-else class="flex flex-col gap-1.5">
-                        <p class="text-sm font-medium">Email</p>
+                        <p class="text-sm font-medium">{{ t('userSheet.email') }}</p>
                         <p class="text-sm text-muted-foreground font-mono">{{ fieldEmail }}</p>
                     </div>
 
                     <!-- Display name -->
                     <Field>
-                        <FieldLabel for="user-display-name">Display Name</FieldLabel>
-                        <Input id="user-display-name" v-model="fieldDisplayName" placeholder="Jane Doe"
+                        <FieldLabel for="user-display-name">{{ t('userSheet.displayName') }}</FieldLabel>
+                        <Input id="user-display-name" v-model="fieldDisplayName" :placeholder="t('userSheet.displayNamePlaceholder')"
                             autocomplete="off"
                             :class="displayNameError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                         <FieldError v-if="displayNameError">{{ displayNameError }}</FieldError>
@@ -198,7 +208,7 @@ const onSubmit = handleSubmit(async (values) => {
                Users change their own password from the Profile page. -->
                     <template v-if="!isEdit">
                         <Field>
-                            <FieldLabel for="user-password">Password</FieldLabel>
+                            <FieldLabel for="user-password">{{ t('userSheet.password') }}</FieldLabel>
                             <Input id="user-password" v-model="fieldPassword" type="password"
                                 autocomplete="new-password"
                                 :class="passwordError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
@@ -208,14 +218,14 @@ const onSubmit = handleSubmit(async (values) => {
 
                     <!-- Role -->
                     <Field>
-                        <FieldLabel>Role</FieldLabel>
+                        <FieldLabel>{{ t('userSheet.role') }}</FieldLabel>
                         <Select :model-value="fieldRole" @update:model-value="fieldRole = $event as 'admin' | 'user'">
                             <SelectTrigger>
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="user">User</SelectItem>
-                                <SelectItem value="admin">Admin</SelectItem>
+                                <SelectItem value="user">{{ t('userSheet.roleUser') }}</SelectItem>
+                                <SelectItem value="admin">{{ t('userSheet.roleAdmin') }}</SelectItem>
                             </SelectContent>
                         </Select>
                     </Field>
@@ -223,8 +233,8 @@ const onSubmit = handleSubmit(async (values) => {
                     <!-- Active toggle — edit only -->
                     <div v-if="isEdit" class="flex items-center justify-between pt-1">
                         <div>
-                            <p class="text-sm font-medium">Active</p>
-                            <p class="text-xs text-muted-foreground">Inactive users cannot log in.</p>
+                            <p class="text-sm font-medium">{{ t('userSheet.active') }}</p>
+                            <p class="text-xs text-muted-foreground">{{ t('userSheet.activeHelp') }}</p>
                         </div>
                         <Switch :model-value="fieldIsActive" @update:model-value="fieldIsActive = $event" />
                     </div>
@@ -232,11 +242,11 @@ const onSubmit = handleSubmit(async (values) => {
                     <SheetFooter class="mt-2 px-0">
                         <Button type="button" variant="outline" :disabled="isSubmitting"
                             @click="emit('update:open', false)">
-                            Cancel
+                            {{ t('userSheet.cancel') }}
                         </Button>
                         <Button type="submit" :disabled="isSubmitting">
                             <Loader2 v-if="isSubmitting" class="size-4 animate-spin" />
-                            {{ isSubmitting ? 'Saving…' : (isEdit ? 'Save Changes' : 'Create User') }}
+                            {{ isSubmitting ? t('userSheet.saving') : (isEdit ? t('userSheet.saveChanges') : t('userSheet.createUser')) }}
                         </Button>
                     </SheetFooter>
 

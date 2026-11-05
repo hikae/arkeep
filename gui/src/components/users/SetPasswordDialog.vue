@@ -4,6 +4,7 @@
 // reset link. The server signs the user out of every session. With "Require a
 // new password" (the default) the user must choose their own at next sign-in.
 import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useForm, useField } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
 import { z } from 'zod'
@@ -33,12 +34,14 @@ const emit = defineEmits<{
 
 // ─── Form ─────────────────────────────────────────────────────────────────────
 
+const { t } = useI18n()
+
 const schema = toTypedSchema(
     z.object({
-        password: passwordSchema,
+        password: passwordSchema(),
         confirm: z.string(),
         must_change: z.boolean(),
-    }).refine((d) => d.password === d.confirm, { path: ['confirm'], message: 'Passwords do not match' }),
+    }).refine((d) => d.password === d.confirm, { path: ['confirm'], message: t('validation.passwordsDoNotMatch') }),
 )
 
 const { handleSubmit, resetForm, isSubmitting } = useForm({
@@ -72,7 +75,7 @@ const onSubmit = handleSubmit(async (values) => {
         emit('update:open', false)
         emit('saved')
     } catch (e) {
-        submitError.value = apiErrorMessage(e, 'Failed to set the password.')
+        submitError.value = apiErrorMessage(e, t('setPasswordDialog.saveFailed'))
     }
 })
 </script>
@@ -81,11 +84,13 @@ const onSubmit = handleSubmit(async (values) => {
     <Dialog :open="props.open" @update:open="emit('update:open', $event)">
         <DialogContent class="sm:max-w-md">
             <DialogHeader>
-                <DialogTitle>Set password</DialogTitle>
+                <DialogTitle>{{ t('setPasswordDialog.title') }}</DialogTitle>
                 <DialogDescription>
                     <span v-if="props.user">
-                        Set a new password for <strong>{{ props.user.display_name }}</strong>
-                        ({{ props.user.email }}). They will be signed out of all sessions.
+                        {{ t('setPasswordDialog.description', {
+                            name: props.user.display_name,
+                            email: props.user.email,
+                        }) }}
                     </span>
                 </DialogDescription>
             </DialogHeader>
@@ -98,14 +103,14 @@ const onSubmit = handleSubmit(async (values) => {
                     </Alert>
 
                     <Field>
-                        <FieldLabel for="set-password">New password</FieldLabel>
+                        <FieldLabel for="set-password">{{ t('setPasswordDialog.newPassword') }}</FieldLabel>
                         <Input id="set-password" v-model="passwordValue" type="password" autocomplete="new-password"
                             :class="passwordError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                         <FieldError v-if="passwordError">{{ passwordError }}</FieldError>
                     </Field>
 
                     <Field>
-                        <FieldLabel for="set-password-confirm">Confirm password</FieldLabel>
+                        <FieldLabel for="set-password-confirm">{{ t('setPasswordDialog.confirmPassword') }}</FieldLabel>
                         <Input id="set-password-confirm" v-model="confirmValue" type="password"
                             autocomplete="new-password"
                             :class="confirmError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
@@ -114,9 +119,9 @@ const onSubmit = handleSubmit(async (values) => {
 
                     <div class="flex items-center justify-between gap-4">
                         <div>
-                            <p class="text-sm font-medium">Require a new password</p>
+                            <p class="text-sm font-medium">{{ t('setPasswordDialog.requireNew') }}</p>
                             <p class="text-xs text-muted-foreground">
-                                The user must choose their own password at next sign-in.
+                                {{ t('setPasswordDialog.requireNewHelp') }}
                             </p>
                         </div>
                         <Switch id="set-password-must-change" :model-value="mustChangeValue"
@@ -126,11 +131,11 @@ const onSubmit = handleSubmit(async (values) => {
                     <DialogFooter>
                         <Button type="button" variant="outline" :disabled="isSubmitting"
                             @click="emit('update:open', false)">
-                            Cancel
+                            {{ t('setPasswordDialog.cancel') }}
                         </Button>
                         <Button type="submit" :disabled="isSubmitting">
                             <Loader2 v-if="isSubmitting" class="size-4 animate-spin" />
-                            {{ isSubmitting ? 'Saving…' : 'Set password' }}
+                            {{ isSubmitting ? t('setPasswordDialog.saving') : t('setPasswordDialog.setPassword') }}
                         </Button>
                     </DialogFooter>
                 </FieldGroup>

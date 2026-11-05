@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useForm, useField } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
 import { z } from 'zod'
@@ -52,6 +53,8 @@ const emit = defineEmits<{
     'update:open': [value: boolean]
 }>()
 
+const { t } = useI18n()
+
 // ---------------------------------------------------------------------------
 // Schema
 // ---------------------------------------------------------------------------
@@ -65,7 +68,7 @@ const repoPasswordRequired = computed(() => !!props.snapshot?.repo_password_requ
 
 const schema = toTypedSchema(
     z.object({
-        agent_id: z.string().min(1, 'Please select a target agent.'),
+        agent_id: z.string().min(1, { error: () => t('restoreSheet.agentRequired') }),
         restore_mode: z.enum(['custom', 'inplace']),
         target_path: z.string().optional(),
         access_key: z.string().optional(),
@@ -79,20 +82,20 @@ const schema = toTypedSchema(
             ctx.addIssue({
                 code: 'custom',
                 path: ['target_path'],
-                message: 'Target path is required.',
+                message: t('restoreSheet.targetPathRequired'),
             })
         }
         if (!destinationDeleted.value) return
         if (destinationType.value === 's3') {
             if (!data.access_key?.trim()) {
-                ctx.addIssue({ code: 'custom', path: ['access_key'], message: 'Access key is required.' })
+                ctx.addIssue({ code: 'custom', path: ['access_key'], message: t('restoreSheet.accessKeyRequired') })
             }
             if (!data.secret_key?.trim()) {
-                ctx.addIssue({ code: 'custom', path: ['secret_key'], message: 'Secret key is required.' })
+                ctx.addIssue({ code: 'custom', path: ['secret_key'], message: t('restoreSheet.secretKeyRequired') })
             }
         }
         if (repoPasswordRequired.value && !data.repo_password) {
-            ctx.addIssue({ code: 'custom', path: ['repo_password'], message: 'Repository password is required.' })
+            ctx.addIssue({ code: 'custom', path: ['repo_password'], message: t('restoreSheet.repoPasswordRequired') })
         }
     })
 )
@@ -241,7 +244,7 @@ async function browseSnapshot() {
         browseEntries.value = await loadChildren('')
         selectedPaths.value = []
     } catch (e: any) {
-        browseError.value = apiErrorMessage(e, 'Failed to browse snapshot.')
+        browseError.value = apiErrorMessage(e, t('restoreSheet.browseFailed'))
     } finally {
         isBrowsing.value = false
     }
@@ -288,7 +291,7 @@ const onSubmit = handleSubmit(async () => {
         emit('update:open', false)
         router.push({ name: 'job-detail', params: { id: res.data.job_id } })
     } catch (e: any) {
-        submitError.value = apiErrorMessage(e, 'Failed to start restore.')
+        submitError.value = apiErrorMessage(e, t('restoreSheet.startFailed'))
     }
 })
 
@@ -308,11 +311,9 @@ function onOpenChange(value: boolean) {
     <Sheet :open="props.open" @update:open="onOpenChange">
         <SheetContent class="sm:max-w-md flex flex-col">
             <SheetHeader>
-                <SheetTitle>Restore snapshot</SheetTitle>
+                <SheetTitle>{{ t('restoreSheet.title') }}</SheetTitle>
                 <SheetDescription>
-                    Restore
-                    <span class="font-mono">{{ snapshot?.restic_snapshot_id?.slice(0, 8) }}</span>
-                    to a target agent.
+                    {{ t('restoreSheet.description', { id: snapshot?.restic_snapshot_id?.slice(0, 8) ?? '' }) }}
                 </SheetDescription>
             </SheetHeader>
 
@@ -332,21 +333,18 @@ function onOpenChange(value: boolean) {
                     <Alert v-if="destinationDeleted">
                         <TriangleAlert class="size-4" />
                         <AlertDescription>
-                            The destination <span class="font-medium">{{ snapshot?.destination_name }}</span>
-                            of this snapshot was deleted, and Arkeep erased its stored credentials.
-                            Enter them below to restore: they are used only for this restore and are not saved.
-                            Only the whole snapshot can be restored, and the target agent must be online.
+                            {{ t('restoreSheet.deletedWarning', { name: snapshot?.destination_name ?? '' }) }}
                         </AlertDescription>
                     </Alert>
 
                     <!-- Agent selector — only online agents can receive a restore job -->
                     <Field>
-                        <FieldLabel for="agent">Target agent</FieldLabel>
+                        <FieldLabel for="agent">{{ t('restoreSheet.targetAgent') }}</FieldLabel>
                         <AsyncCombobox
                             endpoint="/api/v1/agents?status=online"
                             :model-value="agentId ?? ''"
                             :initial-label="props.presetAgent?.name ?? props.snapshot?.agent_name"
-                            placeholder="Select an agent…"
+                            :placeholder="t('restoreSheet.selectAgent')"
                             :disabled="isSubmitting"
                             :class="agentError ? '[&_button]:border-destructive [&_button]:focus-visible:ring-destructive/30' : ''"
                             @update:model-value="agentId = $event"
@@ -357,18 +355,18 @@ function onOpenChange(value: boolean) {
 
                     <!-- Restore mode selector -->
                     <Field>
-                        <FieldLabel>Restore mode</FieldLabel>
+                        <FieldLabel>{{ t('restoreSheet.restoreMode') }}</FieldLabel>
                         <Select :model-value="restoreMode" :disabled="isSubmitting"
                             @update:model-value="restoreMode = $event as 'custom' | 'inplace'">
                             <SelectTrigger>
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="custom">Custom path</SelectItem>
+                                <SelectItem value="custom">{{ t('restoreSheet.customPath') }}</SelectItem>
                                 <SelectItem value="inplace" :disabled="inplaceDisabled">
-                                    Original location
+                                    {{ t('restoreSheet.originalLocation') }}
                                     <span v-if="inplaceDisabled" class="ml-1 text-xs text-muted-foreground">
-                                        (not supported on Windows)
+                                        {{ t('restoreSheet.windowsUnsupported') }}
                                     </span>
                                 </SelectItem>
                             </SelectContent>
@@ -377,14 +375,13 @@ function onOpenChange(value: boolean) {
 
                     <!-- Custom path input — shown only in custom mode -->
                     <Field v-if="restoreMode === 'custom'">
-                        <FieldLabel for="target-path">Target path</FieldLabel>
+                        <FieldLabel for="target-path">{{ t('restoreSheet.targetPath') }}</FieldLabel>
                         <Input id="target-path" v-model="targetPath" :placeholder="defaultTargetPath" autocomplete="off"
                             :disabled="isSubmitting"
                             :class="targetPathError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                         <FieldError v-if="targetPathError">{{ targetPathError }}</FieldError>
                         <p v-else class="text-xs text-muted-foreground mt-1">
-                            Absolute path on the target agent where files will be written.
-                            The original directory structure will be recreated inside this folder.
+                            {{ t('restoreSheet.targetPathHelp') }}
                         </p>
                     </Field>
 
@@ -392,26 +389,25 @@ function onOpenChange(value: boolean) {
                     <Alert v-if="restoreMode === 'inplace'" variant="destructive">
                         <AlertCircle class="size-4" />
                         <AlertDescription>
-                            Files will be restored to their original paths and will overwrite
-                            existing data. This action cannot be undone.
+                            {{ t('restoreSheet.inplaceWarning') }}
                         </AlertDescription>
                     </Alert>
 
                     <!-- Credentials of a deleted destination -->
                     <template v-if="destinationDeleted">
                         <Separator />
-                        <p class="text-sm font-medium">Destination credentials</p>
+                        <p class="text-sm font-medium">{{ t('restoreSheet.destinationCredentials') }}</p>
 
                         <template v-if="destinationType === 's3'">
                             <Field>
-                                <FieldLabel for="restore-access-key">Access key</FieldLabel>
+                                <FieldLabel for="restore-access-key">{{ t('restoreSheet.accessKey') }}</FieldLabel>
                                 <Input id="restore-access-key" v-model="accessKey" autocomplete="off"
                                     :disabled="isSubmitting"
                                     :class="accessKeyError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                                 <FieldError v-if="accessKeyError">{{ accessKeyError }}</FieldError>
                             </Field>
                             <Field>
-                                <FieldLabel for="restore-secret-key">Secret key</FieldLabel>
+                                <FieldLabel for="restore-secret-key">{{ t('restoreSheet.secretKey') }}</FieldLabel>
                                 <Input id="restore-secret-key" v-model="secretKey" type="password" autocomplete="off"
                                     :disabled="isSubmitting"
                                     :class="secretKeyError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
@@ -421,51 +417,49 @@ function onOpenChange(value: boolean) {
 
                         <template v-else-if="destinationType === 'sftp'">
                             <Field>
-                                <FieldLabel for="restore-sftp-password">Password</FieldLabel>
+                                <FieldLabel for="restore-sftp-password">{{ t('restoreSheet.password') }}</FieldLabel>
                                 <Input id="restore-sftp-password" v-model="credPassword" type="password"
                                     autocomplete="off" :disabled="isSubmitting" />
                             </Field>
                             <Field>
-                                <FieldLabel for="restore-sftp-key">Private key</FieldLabel>
+                                <FieldLabel for="restore-sftp-key">{{ t('restoreSheet.privateKey') }}</FieldLabel>
                                 <textarea id="restore-sftp-key" v-model="privateKey" rows="4" :disabled="isSubmitting"
                                     placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
                                     class="border-input bg-background placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 flex w-full rounded-md border px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] focus-visible:ring-[3px] resize-none font-mono" />
                                 <p class="text-xs text-muted-foreground mt-1">
-                                    Enter a password, a private key, or leave both empty if the agent's own SSH key has access.
+                                    {{ t('restoreSheet.sftpCredHelp') }}
                                 </p>
                             </Field>
                         </template>
 
                         <template v-else-if="destinationType === 'rest'">
                             <Field>
-                                <FieldLabel for="restore-rest-user">Username</FieldLabel>
+                                <FieldLabel for="restore-rest-user">{{ t('restoreSheet.username') }}</FieldLabel>
                                 <Input id="restore-rest-user" v-model="credUser" autocomplete="off"
                                     :disabled="isSubmitting" />
                             </Field>
                             <Field>
-                                <FieldLabel for="restore-rest-password">Password</FieldLabel>
+                                <FieldLabel for="restore-rest-password">{{ t('restoreSheet.password') }}</FieldLabel>
                                 <Input id="restore-rest-password" v-model="credPassword" type="password"
                                     autocomplete="off" :disabled="isSubmitting" />
                                 <p class="text-xs text-muted-foreground mt-1">
-                                    Leave empty if the REST server does not require authentication.
+                                    {{ t('restoreSheet.restCredHelp') }}
                                 </p>
                             </Field>
                         </template>
 
                         <p v-else class="text-xs text-muted-foreground">
-                            This destination type needs no stored credentials: the target agent must be able to
-                            reach the repository on its own.
+                            {{ t('restoreSheet.noCredentialsNeeded') }}
                         </p>
 
                         <Field v-if="repoPasswordRequired">
-                            <FieldLabel for="restore-repo-password">Repository password</FieldLabel>
+                            <FieldLabel for="restore-repo-password">{{ t('restoreSheet.repoPassword') }}</FieldLabel>
                             <Input id="restore-repo-password" v-model="repoPassword" type="password"
                                 autocomplete="off" :disabled="isSubmitting"
                                 :class="repoPasswordError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                             <FieldError v-if="repoPasswordError">{{ repoPasswordError }}</FieldError>
                             <p v-else class="text-xs text-muted-foreground mt-1">
-                                The restic password of the repository. Arkeep no longer has it, because the
-                                policy that created this snapshot was deleted too (or the snapshot was imported).
+                                {{ t('restoreSheet.repoPasswordHelp') }}
                             </p>
                         </Field>
                     </template>
@@ -474,15 +468,15 @@ function onOpenChange(value: boolean) {
                     <template v-if="!destinationDeleted">
                         <Separator />
                         <div v-if="presetPaths?.length" class="space-y-2">
-                            <p class="text-sm font-medium">Files to restore</p>
+                            <p class="text-sm font-medium">{{ t('restoreSheet.filesToRestore') }}</p>
                             <ul class="max-h-64 overflow-y-auto rounded border p-2 font-mono text-xs space-y-0.5">
                                 <li v-for="path in presetPaths" :key="path" class="truncate">{{ path }}</li>
                             </ul>
                         </div>
                         <div v-else class="space-y-2">
-                            <p class="text-sm font-medium">Files to restore</p>
+                            <p class="text-sm font-medium">{{ t('restoreSheet.filesToRestore') }}</p>
                             <p class="text-xs text-muted-foreground">
-                                Leave empty to restore the entire snapshot, or browse to select specific files.
+                                {{ t('restoreSheet.filesHelp') }}
                             </p>
                             <Button
                                 type="button"
@@ -492,12 +486,12 @@ function onOpenChange(value: boolean) {
                                 @click="browseSnapshot"
                             >
                                 <Loader2 v-if="isBrowsing" class="mr-2 h-4 w-4 animate-spin" />
-                                {{ browseEntries.length > 0 ? 'Refresh file list' : 'Browse files' }}
+                                {{ browseEntries.length > 0 ? t('restoreSheet.refreshFileList') : t('restoreSheet.browseFiles') }}
                             </Button>
                             <p v-if="browseError" class="text-xs text-destructive">{{ browseError }}</p>
                             <div v-if="browseEntries.length > 0" class="space-y-1">
                                 <p v-if="selectedPaths.length > 0" class="text-xs text-muted-foreground">
-                                    {{ selectedPaths.length }} item(s) selected
+                                    {{ t('restoreSheet.selectedItems', { n: selectedPaths.length }) }}
                                 </p>
                                 <SnapshotFileTree
                                     v-model="selectedPaths"
@@ -511,11 +505,11 @@ function onOpenChange(value: boolean) {
 
                     <SheetFooter class="mt-2 px-0">
                         <Button type="button" variant="outline" :disabled="isSubmitting" @click="onOpenChange(false)">
-                            Cancel
+                            {{ t('restoreSheet.cancel') }}
                         </Button>
                         <Button type="submit" :disabled="isSubmitting">
                             <Loader2 v-if="isSubmitting" class="size-4 animate-spin" />
-                            {{ isSubmitting ? 'Starting…' : 'Start restore' }}
+                            {{ isSubmitting ? t('restoreSheet.starting') : t('restoreSheet.startRestore') }}
                         </Button>
                     </SheetFooter>
 

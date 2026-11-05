@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, useTemplateRef } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useForm, useField } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
 import { z } from 'zod'
@@ -21,6 +22,7 @@ import type {
 } from '@/types'
 
 const auth = useAuthStore()
+const { t } = useI18n()
 
 const isOIDC = computed(() => auth.user?.is_oidc ?? false)
 
@@ -63,7 +65,7 @@ const verifyPinEl = useTemplateRef<HTMLElement>('verifyPin')
 // form created in the component.
 const verifyForm = useForm({
     validationSchema: toTypedSchema(z.object({
-        code: z.array(z.string()).refine((c) => c.join('').length === 6, 'Enter all 6 digits'),
+        code: z.array(z.string()).refine((c) => c.join('').length === 6, { error: () => t('twoFactor.validation.allDigits') }),
     })),
     initialValues: { code: [] as string[] },
 })
@@ -84,7 +86,7 @@ async function startEnrollment(): Promise<void> {
         enrollStep.value = 'qr'
         enrollDialogOpen.value = true
     } catch (e: any) {
-        enrollError.value = apiErrorMessage(e, 'Failed to start enrollment.')
+        enrollError.value = apiErrorMessage(e, t('twoFactor.errors.startFailed'))
     } finally {
         enrollSubmitting.value = false
     }
@@ -116,7 +118,7 @@ const submitVerify = verifyForm.handleSubmit(async (values) => {
         recoveryCodesDialogOpen.value = true
         await fetchStatus()
     } catch (e: any) {
-        enrollError.value = apiErrorMessage(e, 'Invalid code.')
+        enrollError.value = apiErrorMessage(e, t('twoFactor.errors.invalidCode'))
         enrollSubmitting.value = false
         // Clear the rejected code and put the cursor back on the first digit.
         verifyCode.value = []
@@ -158,7 +160,7 @@ function downloadRecoveryCodes(): void {
 // passwordFormSchema is the current password that confirms a sensitive
 // change; the server checks it.
 const passwordFormSchema = toTypedSchema(z.object({
-    password: z.string().min(1, 'Password is required'),
+    password: z.string().min(1, { error: () => t('twoFactor.validation.passwordRequired') }),
 }))
 
 const disableDialogOpen = ref(false)
@@ -187,7 +189,7 @@ const confirmDisable = disableForm.handleSubmit(async (values) => {
         disableDialogOpen.value = false
         await fetchStatus()
     } catch (e: any) {
-        disableError.value = apiErrorMessage(e, 'Incorrect password.')
+        disableError.value = apiErrorMessage(e, t('twoFactor.errors.incorrectPassword'))
     }
 })
 
@@ -222,7 +224,7 @@ const confirmRegenerate = regenerateForm.handleSubmit(async (values) => {
         recoveryCodesDialogOpen.value = true
         await fetchStatus()
     } catch (e: any) {
-        regenerateError.value = apiErrorMessage(e, 'Incorrect password.')
+        regenerateError.value = apiErrorMessage(e, t('twoFactor.errors.incorrectPassword'))
     }
 })
 </script>
@@ -230,16 +232,16 @@ const confirmRegenerate = regenerateForm.handleSubmit(async (values) => {
 <template>
     <div class="grid grid-cols-[280px_1fr] gap-12 py-8 border-b">
         <div>
-            <h2 class="text-sm font-semibold">Two-Factor Authentication</h2>
+            <h2 class="text-sm font-semibold">{{ t('twoFactor.title') }}</h2>
             <p class="mt-1 text-sm text-muted-foreground">
-                Require a code from an authenticator app, in addition to your password, when signing in.
+                {{ t('twoFactor.description') }}
             </p>
         </div>
 
         <!-- OIDC accounts are managed by their identity provider -->
         <div v-if="isOIDC"
             class="flex items-center justify-center rounded-lg border border-dashed p-8 text-sm text-muted-foreground">
-            Two-factor authentication is managed by your identity provider.
+            {{ t('twoFactor.oidcManaged') }}
         </div>
 
         <div v-else-if="statusLoading || !status" class="flex justify-center py-4 text-muted-foreground">
@@ -251,15 +253,15 @@ const confirmRegenerate = regenerateForm.handleSubmit(async (values) => {
             <div class="flex items-center gap-2">
                 <Badge variant="outline" class="gap-1">
                     <ShieldCheck class="size-3" />
-                    Enabled
+                    {{ t('twoFactor.enabled') }}
                 </Badge>
                 <span class="text-sm text-muted-foreground">
-                    {{ status.recovery_codes_remaining }} recovery code{{ status.recovery_codes_remaining === 1 ? '' : 's' }} remaining
+                    {{ t('twoFactor.recoveryRemaining', status.recovery_codes_remaining, { named: { n: status.recovery_codes_remaining } }) }}
                 </span>
             </div>
             <div class="flex gap-2">
-                <Button variant="outline" @click="openRegenerateDialog">Regenerate recovery codes</Button>
-                <Button variant="outline" @click="openDisableDialog">Disable</Button>
+                <Button variant="outline" @click="openRegenerateDialog">{{ t('twoFactor.regenerateCodes') }}</Button>
+                <Button variant="outline" @click="openDisableDialog">{{ t('twoFactor.disable') }}</Button>
             </div>
         </div>
 
@@ -274,7 +276,7 @@ const confirmRegenerate = regenerateForm.handleSubmit(async (values) => {
             </Transition>
             <Button :disabled="enrollSubmitting" @click="startEnrollment">
                 <Loader2 v-if="enrollSubmitting" class="size-4 animate-spin" />
-                {{ enrollSubmitting ? 'Starting…' : 'Enable two-factor authentication' }}
+                {{ enrollSubmitting ? t('twoFactor.starting') : t('twoFactor.enable') }}
             </Button>
         </div>
     </div>
@@ -283,13 +285,12 @@ const confirmRegenerate = regenerateForm.handleSubmit(async (values) => {
     <Dialog :open="enrollDialogOpen" @update:open="(v) => { if (!v) cancelEnrollment() }">
         <DialogContent>
             <DialogHeader>
-                <DialogTitle>Set up two-factor authentication</DialogTitle>
+                <DialogTitle>{{ t('twoFactor.setupTitle') }}</DialogTitle>
                 <DialogDescription v-if="enrollStep === 'qr'">
-                    Scan this QR code with an authenticator app (Google Authenticator, Aegis, 1Password, …). If you
-                    can't scan it, enter the setup key manually instead.
+                    {{ t('twoFactor.setupQrDescription') }}
                 </DialogDescription>
                 <DialogDescription v-else>
-                    Enter the 6-digit code your authenticator app is now showing to confirm setup.
+                    {{ t('twoFactor.setupVerifyDescription') }}
                 </DialogDescription>
             </DialogHeader>
 
@@ -302,7 +303,7 @@ const confirmRegenerate = regenerateForm.handleSubmit(async (values) => {
             </Transition>
 
             <div v-if="enrollStep === 'qr'" class="flex flex-col items-center gap-3">
-                <img v-if="qrDataUrl" :src="qrDataUrl" alt="QR code for authenticator app enrollment"
+                <img v-if="qrDataUrl" :src="qrDataUrl" :alt="t('twoFactor.qrAlt')"
                     class="rounded-md border" width="200" height="200">
                 <code class="block w-full break-all rounded bg-muted px-2 py-1 text-center text-xs">{{ setupData?.secret }}</code>
             </div>
@@ -323,14 +324,14 @@ const confirmRegenerate = regenerateForm.handleSubmit(async (values) => {
 
             <DialogFooter>
                 <template v-if="enrollStep === 'qr'">
-                    <Button variant="outline" @click="cancelEnrollment">Cancel</Button>
-                    <Button @click="enrollStep = 'verify'">Done</Button>
+                    <Button variant="outline" @click="cancelEnrollment">{{ t('twoFactor.cancel') }}</Button>
+                    <Button @click="enrollStep = 'verify'">{{ t('twoFactor.done') }}</Button>
                 </template>
                 <template v-else>
-                    <Button variant="outline" :disabled="enrollSubmitting" @click="enrollStep = 'qr'">Back</Button>
+                    <Button variant="outline" :disabled="enrollSubmitting" @click="enrollStep = 'qr'">{{ t('twoFactor.back') }}</Button>
                     <Button :disabled="enrollSubmitting" @click="submitVerify()">
                         <Loader2 v-if="enrollSubmitting" class="size-4 animate-spin" />
-                        {{ enrollSubmitting ? 'Verifying…' : 'Verify' }}
+                        {{ enrollSubmitting ? t('twoFactor.verifying') : t('twoFactor.verify') }}
                     </Button>
                 </template>
             </DialogFooter>
@@ -341,10 +342,9 @@ const confirmRegenerate = regenerateForm.handleSubmit(async (values) => {
     <Dialog :open="recoveryCodesDialogOpen" @update:open="recoveryCodesDialogOpen = $event">
         <DialogContent>
             <DialogHeader>
-                <DialogTitle>Save your recovery codes</DialogTitle>
+                <DialogTitle>{{ t('twoFactor.codesTitle') }}</DialogTitle>
                 <DialogDescription>
-                    Each code can be used once to sign in if you lose access to your authenticator app. Store
-                    them somewhere safe — they will not be shown again.
+                    {{ t('twoFactor.codesDescription') }}
                 </DialogDescription>
             </DialogHeader>
             <div class="grid grid-cols-2 gap-2 rounded-md border bg-muted/50 p-4 font-mono text-sm">
@@ -352,10 +352,10 @@ const confirmRegenerate = regenerateForm.handleSubmit(async (values) => {
             </div>
             <DialogFooter class="gap-2 sm:justify-between">
                 <div class="flex gap-2">
-                    <Button variant="outline" @click="copyRecoveryCodes">{{ codesCopied ? 'Copied!' : 'Copy' }}</Button>
-                    <Button variant="outline" @click="downloadRecoveryCodes">Download</Button>
+                    <Button variant="outline" @click="copyRecoveryCodes">{{ codesCopied ? t('twoFactor.copied') : t('twoFactor.copy') }}</Button>
+                    <Button variant="outline" @click="downloadRecoveryCodes">{{ t('twoFactor.download') }}</Button>
                 </div>
-                <Button @click="recoveryCodesDialogOpen = false">Done</Button>
+                <Button @click="recoveryCodesDialogOpen = false">{{ t('twoFactor.done') }}</Button>
             </DialogFooter>
         </DialogContent>
     </Dialog>
@@ -364,9 +364,9 @@ const confirmRegenerate = regenerateForm.handleSubmit(async (values) => {
     <Dialog :open="disableDialogOpen" @update:open="disableDialogOpen = $event">
         <DialogContent>
             <DialogHeader>
-                <DialogTitle>Disable two-factor authentication?</DialogTitle>
+                <DialogTitle>{{ t('twoFactor.disableTitle') }}</DialogTitle>
                 <DialogDescription>
-                    Your account will only require a password to sign in. Enter your password to confirm.
+                    {{ t('twoFactor.disableDescription') }}
                 </DialogDescription>
             </DialogHeader>
             <FieldGroup>
@@ -378,7 +378,7 @@ const confirmRegenerate = regenerateForm.handleSubmit(async (values) => {
                     </Alert>
                 </Transition>
                 <Field>
-                    <FieldLabel for="disable-password">Password</FieldLabel>
+                    <FieldLabel for="disable-password">{{ t('twoFactor.password') }}</FieldLabel>
                     <div class="relative">
                         <Input id="disable-password" v-model="disablePassword"
                             :type="showDisablePassword ? 'text' : 'password'" autocomplete="current-password"
@@ -387,7 +387,7 @@ const confirmRegenerate = regenerateForm.handleSubmit(async (values) => {
                             @keydown.enter.prevent="confirmDisable()" />
                         <button type="button"
                             class="absolute transition-colors -translate-y-1/2 right-3 top-1/2 text-muted-foreground hover:text-foreground"
-                            :aria-label="showDisablePassword ? 'Hide password' : 'Show password'"
+                            :aria-label="showDisablePassword ? t('auth.hidePassword') : t('auth.showPassword')"
                             @click="showDisablePassword = !showDisablePassword">
                             <EyeOff v-if="showDisablePassword" class="size-4" />
                             <Eye v-else class="size-4" />
@@ -397,10 +397,10 @@ const confirmRegenerate = regenerateForm.handleSubmit(async (values) => {
                 </Field>
             </FieldGroup>
             <DialogFooter>
-                <Button variant="outline" :disabled="disableLoading" @click="disableDialogOpen = false">Cancel</Button>
+                <Button variant="outline" :disabled="disableLoading" @click="disableDialogOpen = false">{{ t('twoFactor.cancel') }}</Button>
                 <Button variant="destructive" :disabled="disableLoading" @click="confirmDisable()">
                     <Loader2 v-if="disableLoading" class="size-4 animate-spin" />
-                    {{ disableLoading ? 'Disabling…' : 'Disable' }}
+                    {{ disableLoading ? t('twoFactor.disabling') : t('twoFactor.disable') }}
                 </Button>
             </DialogFooter>
         </DialogContent>
@@ -410,9 +410,9 @@ const confirmRegenerate = regenerateForm.handleSubmit(async (values) => {
     <Dialog :open="regenerateDialogOpen" @update:open="regenerateDialogOpen = $event">
         <DialogContent>
             <DialogHeader>
-                <DialogTitle>Regenerate recovery codes?</DialogTitle>
+                <DialogTitle>{{ t('twoFactor.regenerateTitle') }}</DialogTitle>
                 <DialogDescription>
-                    Your existing recovery codes will stop working. Enter your password to confirm.
+                    {{ t('twoFactor.regenerateDescription') }}
                 </DialogDescription>
             </DialogHeader>
             <FieldGroup>
@@ -424,7 +424,7 @@ const confirmRegenerate = regenerateForm.handleSubmit(async (values) => {
                     </Alert>
                 </Transition>
                 <Field>
-                    <FieldLabel for="regenerate-password">Password</FieldLabel>
+                    <FieldLabel for="regenerate-password">{{ t('twoFactor.password') }}</FieldLabel>
                     <div class="relative">
                         <Input id="regenerate-password" v-model="regeneratePassword"
                             :type="showRegeneratePassword ? 'text' : 'password'" autocomplete="current-password"
@@ -433,7 +433,7 @@ const confirmRegenerate = regenerateForm.handleSubmit(async (values) => {
                             @keydown.enter.prevent="confirmRegenerate()" />
                         <button type="button"
                             class="absolute transition-colors -translate-y-1/2 right-3 top-1/2 text-muted-foreground hover:text-foreground"
-                            :aria-label="showRegeneratePassword ? 'Hide password' : 'Show password'"
+                            :aria-label="showRegeneratePassword ? t('auth.hidePassword') : t('auth.showPassword')"
                             @click="showRegeneratePassword = !showRegeneratePassword">
                             <EyeOff v-if="showRegeneratePassword" class="size-4" />
                             <Eye v-else class="size-4" />
@@ -443,10 +443,10 @@ const confirmRegenerate = regenerateForm.handleSubmit(async (values) => {
                 </Field>
             </FieldGroup>
             <DialogFooter>
-                <Button variant="outline" :disabled="regenerateLoading" @click="regenerateDialogOpen = false">Cancel</Button>
+                <Button variant="outline" :disabled="regenerateLoading" @click="regenerateDialogOpen = false">{{ t('twoFactor.cancel') }}</Button>
                 <Button :disabled="regenerateLoading" @click="confirmRegenerate()">
                     <Loader2 v-if="regenerateLoading" class="size-4 animate-spin" />
-                    {{ regenerateLoading ? 'Regenerating…' : 'Regenerate' }}
+                    {{ regenerateLoading ? t('twoFactor.regenerating') : t('twoFactor.regenerate') }}
                 </Button>
             </DialogFooter>
         </DialogContent>

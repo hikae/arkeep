@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Server, ShieldCheck, BriefcaseBusiness, Camera, RefreshCw, AlertCircle, CheckCircle, XCircle } from '@lucide/vue'
+import { useI18n } from 'vue-i18n'
 import { api, apiErrorMessage } from '@/services/api'
 import type { ApiResponse, Job } from '@/types'
 import {
@@ -26,7 +27,7 @@ import {
     componentToString,
     type ChartConfig,
 } from '@/components/ui/chart'
-import { statusVariant, statusClass, statusLabel, statusIcon, formatDate, formatDuration } from '@/lib/jobUtils'
+import { statusVariant, statusClass, statusLabel, statusIcon, formatDate, formatDuration, jobTypeLabel } from '@/lib/jobUtils'
 
 // ---------------------------------------------------------------------------
 // Local types — mirror dashboardResponse in server/internal/api/dashboard.go
@@ -66,6 +67,7 @@ interface DashboardData {
 // ---------------------------------------------------------------------------
 
 const router = useRouter()
+const { t } = useI18n()
 const loading = ref(true)
 const error = ref<string | null>(null)
 const data = ref<DashboardData | null>(null)
@@ -76,12 +78,12 @@ const recentJobs = ref<Job[]>([])
 // ---------------------------------------------------------------------------
 
 const jobsChartConfig = {
-    succeeded: { label: 'Succeeded', color: 'var(--chart-2)' },
-    failed: { label: 'Failed', color: 'var(--chart-5)' },
+    succeeded: { label: t('dashboard.chartSucceeded'), color: 'var(--chart-2)' },
+    failed: { label: t('dashboard.chartFailed'), color: 'var(--chart-5)' },
 } satisfies ChartConfig
 
 const sizeChartConfig = {
-    size: { label: 'Backed up', color: 'var(--chart-1)' }, // brand primary; unit shown in the card title
+    size: { label: t('dashboard.chartBackedUp'), color: 'var(--chart-1)' }, // brand primary; unit shown in the card title
 } satisfies ChartConfig
 
 // ---------------------------------------------------------------------------
@@ -121,16 +123,16 @@ const sizeData = computed(() =>
 
 // Accessible aria-labels summarising each chart for screen readers.
 const jobsChartAriaLabel = computed(() => {
-    if (!data.value) return 'Jobs activity chart — loading'
+    if (!data.value) return t('dashboard.jobsChartLoading')
     const total = data.value.job_activity.reduce((s, d) => s + d.succeeded + d.failed, 0)
     const failed = data.value.job_activity.reduce((s, d) => s + d.failed, 0)
-    return `Jobs last 7 days: ${total} total, ${failed} failed`
+    return t('dashboard.jobsChartSummary', { total, failed })
 })
 
 const sizeChartAriaLabel = computed(() => {
-    if (!data.value) return 'Backup size chart — loading'
+    if (!data.value) return t('dashboard.sizeChartLoading')
     const totalBytes = data.value.size_activity.reduce((s, d) => s + d.size_bytes, 0)
-    return `Size backed up last 7 days: ${formatBytes(totalBytes)} total`
+    return t('dashboard.sizeChartSummary', { size: formatBytes(totalBytes) })
 })
 
 // componentToString must be called during setup (it calls useId internally).
@@ -171,7 +173,7 @@ async function fetchAll() {
         data.value = dashRes.data
         recentJobs.value = jobsRes.data.items
     } catch (e: any) {
-        error.value = apiErrorMessage(e, 'Failed to load dashboard data.')
+        error.value = apiErrorMessage(e, t('dashboard.loadFailed'))
     } finally {
         loading.value = false
     }
@@ -186,12 +188,12 @@ onMounted(fetchAll)
         <!-- Page header -->
         <div class="flex items-center justify-between">
             <div>
-                <h1 class="text-2xl font-semibold tracking-tight">Dashboard</h1>
+                <h1 class="text-2xl font-semibold tracking-tight">{{ t('dashboard.title') }}</h1>
                 <p class="mt-1 text-sm text-muted-foreground">
-                    Overview of your backup infrastructure.
+                    {{ t('dashboard.subtitle') }}
                 </p>
             </div>
-            <Button variant="outline" size="icon" aria-label="Refresh" :disabled="loading" @click="fetchAll">
+            <Button variant="outline" size="icon" :aria-label="t('common.refresh')" :disabled="loading" @click="fetchAll">
                 <RefreshCw class="w-4 h-4" :class="{ 'animate-spin': loading }" />
             </Button>
         </div>
@@ -207,9 +209,10 @@ onMounted(fetchAll)
         <Alert v-if="(data?.checks_failed ?? 0) > 0" variant="destructive">
             <AlertCircle class="size-4" />
             <AlertDescription class="flex flex-wrap items-center gap-x-2">
-                {{ data?.checks_failed }} of {{ data?.checks_enabled }} destination{{ data?.checks_enabled === 1 ? '' : 's' }}
-                with integrity checks failed {{ data?.checks_failed === 1 ? 'its' : 'their' }} last check.
-                <RouterLink to="/destinations" class="underline underline-offset-4 font-medium">View destinations</RouterLink>
+                {{ t('dashboard.checksFailed', data?.checks_enabled ?? 0, {
+                    named: { failed: data?.checks_failed, total: data?.checks_enabled },
+                }) }}
+                <RouterLink to="/destinations" class="underline underline-offset-4 font-medium">{{ t('dashboard.viewDestinations') }}</RouterLink>
             </AlertDescription>
         </Alert>
 
@@ -219,7 +222,7 @@ onMounted(fetchAll)
             <!-- Agents -->
             <Card>
                 <CardHeader class="flex flex-row items-center justify-between pb-2">
-                    <CardTitle class="text-sm font-medium text-muted-foreground">Agents</CardTitle>
+                    <CardTitle class="text-sm font-medium text-muted-foreground">{{ t('dashboard.agents') }}</CardTitle>
                     <Server class="w-4 h-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
@@ -232,7 +235,7 @@ onMounted(fetchAll)
                             {{ data?.agents_online }}
                             <span class="text-lg font-normal text-muted-foreground">/ {{ data?.agents_total }}</span>
                         </p>
-                        <p class="mt-1 text-xs text-muted-foreground">online</p>
+                        <p class="mt-1 text-xs text-muted-foreground">{{ t('dashboard.online') }}</p>
                     </template>
                 </CardContent>
             </Card>
@@ -240,7 +243,7 @@ onMounted(fetchAll)
             <!-- Active policies -->
             <Card>
                 <CardHeader class="flex flex-row items-center justify-between pb-2">
-                    <CardTitle class="text-sm font-medium text-muted-foreground">Active policies</CardTitle>
+                    <CardTitle class="text-sm font-medium text-muted-foreground">{{ t('dashboard.activePolicies') }}</CardTitle>
                     <ShieldCheck class="w-4 h-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
@@ -250,7 +253,7 @@ onMounted(fetchAll)
                     </template>
                     <template v-else>
                         <p class="text-3xl font-bold tracking-tight">{{ data?.policies_active }}</p>
-                        <p class="mt-1 text-xs text-muted-foreground">of {{ data?.policies_total }} total</p>
+                        <p class="mt-1 text-xs text-muted-foreground">{{ t('dashboard.ofTotal', { total: data?.policies_total }) }}</p>
                     </template>
                 </CardContent>
             </Card>
@@ -258,7 +261,7 @@ onMounted(fetchAll)
             <!-- Jobs today -->
             <Card>
                 <CardHeader class="flex flex-row items-center justify-between pb-2">
-                    <CardTitle class="text-sm font-medium text-muted-foreground">Jobs today</CardTitle>
+                    <CardTitle class="text-sm font-medium text-muted-foreground">{{ t('dashboard.jobsToday') }}</CardTitle>
                     <BriefcaseBusiness class="w-4 h-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
@@ -271,12 +274,12 @@ onMounted(fetchAll)
                         <p class="mt-1 flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                             <span class="inline-flex items-center gap-1 text-green-600 dark:text-green-400 font-medium">
                                 <CheckCircle class="w-3 h-3 shrink-0" />
-                                {{ data?.jobs_today_succeeded }} succeeded
+                                {{ t('dashboard.succeeded', { n: data?.jobs_today_succeeded }) }}
                             </span>
                             <span class="inline-flex items-center gap-1 font-medium"
                                 :class="(data?.jobs_today_failed ?? 0) > 0 ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'">
                                 <XCircle class="w-3 h-3 shrink-0" />
-                                {{ data?.jobs_today_failed }} failed
+                                {{ t('dashboard.failed', { n: data?.jobs_today_failed }) }}
                             </span>
                         </p>
                     </template>
@@ -286,7 +289,7 @@ onMounted(fetchAll)
             <!-- Snapshots -->
             <Card>
                 <CardHeader class="flex flex-row items-center justify-between pb-2">
-                    <CardTitle class="text-sm font-medium text-muted-foreground">Snapshots</CardTitle>
+                    <CardTitle class="text-sm font-medium text-muted-foreground">{{ t('dashboard.snapshots') }}</CardTitle>
                     <Camera class="w-4 h-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
@@ -297,7 +300,7 @@ onMounted(fetchAll)
                     <template v-else>
                         <p class="text-3xl font-bold tracking-tight">{{ data?.snapshots_total }}</p>
                         <p class="mt-1 text-xs text-muted-foreground">
-                            {{ formatBytes(data?.snapshots_total_size ?? 0) }} total
+                            {{ t('dashboard.totalSize', { size: formatBytes(data?.snapshots_total_size ?? 0) }) }}
                         </p>
                     </template>
                 </CardContent>
@@ -311,7 +314,7 @@ onMounted(fetchAll)
             <!-- Jobs activity -->
             <Card>
                 <CardHeader>
-                    <CardTitle class="text-sm font-medium">Jobs — last 7 days</CardTitle>
+                    <CardTitle class="text-sm font-medium">{{ t('dashboard.jobsLast7Days') }}</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <Skeleton v-if="loading" class="h-44 w-full" />
@@ -338,7 +341,7 @@ onMounted(fetchAll)
             <!-- Size backed up -->
             <Card>
                 <CardHeader>
-                    <CardTitle class="text-sm font-medium">Size backed up — last 7 days ({{ sizeUnit.label }})</CardTitle>
+                    <CardTitle class="text-sm font-medium">{{ t('dashboard.sizeLast7Days', { unit: sizeUnit.label }) }}</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <Skeleton v-if="loading" class="h-44 w-full" />
@@ -364,18 +367,18 @@ onMounted(fetchAll)
         <!-- ── Recent jobs ────────────────────────────────────────────────────── -->
         <Card>
             <CardHeader>
-                <CardTitle class="text-sm font-medium">Recent jobs</CardTitle>
+                <CardTitle class="text-sm font-medium">{{ t('dashboard.recentJobs') }}</CardTitle>
             </CardHeader>
             <CardContent class="p-0 overflow-x-auto">
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Policy</TableHead>
-                            <TableHead>Type</TableHead>
-                            <TableHead>Agent</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Started</TableHead>
-                            <TableHead>Duration</TableHead>
+                            <TableHead>{{ t('dashboard.policy') }}</TableHead>
+                            <TableHead>{{ t('dashboard.type') }}</TableHead>
+                            <TableHead>{{ t('dashboard.agent') }}</TableHead>
+                            <TableHead>{{ t('dashboard.status') }}</TableHead>
+                            <TableHead>{{ t('dashboard.started') }}</TableHead>
+                            <TableHead>{{ t('dashboard.duration') }}</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -398,9 +401,9 @@ onMounted(fetchAll)
                                             <BriefcaseBusiness class="w-10 h-10 text-muted-foreground" />
                                         </div>
                                         <div>
-                                            <p class="font-medium">No jobs yet</p>
+                                            <p class="font-medium">{{ t('dashboard.noJobs') }}</p>
                                             <p class="mt-1 text-sm text-muted-foreground">
-                                                Jobs will appear here once a policy has been triggered.
+                                                {{ t('dashboard.noJobsDetail') }}
                                             </p>
                                         </div>
                                     </div>
@@ -414,12 +417,12 @@ onMounted(fetchAll)
                                 class="cursor-pointer hover:bg-muted/50"
                                 tabindex="0"
                                 role="link"
-                                :aria-label="`View job ${job.policy_name}`"
+                                :aria-label="t('dashboard.viewJob', { name: job.policy_name })"
                                 @click="router.push(`/jobs/${job.id}`)"
                                 @keyup.enter="router.push(`/jobs/${job.id}`)">
                                 <TableCell class="font-medium">{{ job.policy_name }}</TableCell>
                                 <TableCell>
-                                    <Badge variant="outline" class="capitalize">{{ job.type }}</Badge>
+                                    <Badge variant="outline" class="capitalize">{{ jobTypeLabel(job.type) }}</Badge>
                                 </TableCell>
                                 <TableCell class="text-muted-foreground">{{ job.agent_name }}</TableCell>
                                 <TableCell>

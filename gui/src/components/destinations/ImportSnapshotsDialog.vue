@@ -4,6 +4,7 @@
 // destination; this covers repointing or re-scanning an existing one — the last
 // step when migrating a repository between storage providers.
 import { ref, watch, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useForm, useField } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
 import { z } from 'zod'
@@ -36,11 +37,13 @@ const emit = defineEmits<{
 
 // The password is the one of an existing repository, so it has no minimum
 // length: only its presence is checked.
+const { t } = useI18n()
+
 const { handleSubmit, resetForm, isSubmitting: submitting } = useForm({
-    validationSchema: toTypedSchema(z.object({
-        agent_id: z.string().min(1, 'Please select an agent.'),
-        repo_password: z.string().min(1, 'Repository password is required.'),
-    })),
+    validationSchema: computed(() => toTypedSchema(z.object({
+        agent_id: z.string().min(1, t('importSnapshots.agentRequired')),
+        repo_password: z.string().min(1, t('importSnapshots.repoPasswordRequired')),
+    }))),
     initialValues: { agent_id: '', repo_password: '' },
 })
 
@@ -82,7 +85,7 @@ const onSubmit = handleSubmit(async (values) => {
         result.value = res.data
         emit('imported')
     } catch (e: any) {
-        submitError.value = apiErrorMessage(e, 'Failed to import snapshots.')
+        submitError.value = apiErrorMessage(e, t('importSnapshots.importFailed'))
     }
 })
 </script>
@@ -91,11 +94,9 @@ const onSubmit = handleSubmit(async (values) => {
     <Dialog :open="props.open" @update:open="onOpenChange">
         <DialogContent class="sm:max-w-md">
             <DialogHeader>
-                <DialogTitle>Import snapshots</DialogTitle>
+                <DialogTitle>{{ t('importSnapshots.dialogTitle') }}</DialogTitle>
                 <DialogDescription>
-                    Reads the Restic repository at
-                    <span class="font-medium">{{ props.destination?.name }}</span>
-                    through the selected agent and records any snapshot not yet known.
+                    {{ t('importSnapshots.dialogDescription', { name: props.destination?.name ?? '' }) }}
                 </DialogDescription>
             </DialogHeader>
 
@@ -115,29 +116,29 @@ const onSubmit = handleSubmit(async (values) => {
 
             <form v-else class="space-y-4" novalidate @submit="onSubmit">
                 <Field>
-                    <FieldLabel for="import-dialog-agent">Agent</FieldLabel>
+                    <FieldLabel for="import-dialog-agent">{{ t('importSnapshots.agent') }}</FieldLabel>
                     <AsyncCombobox
                         endpoint="/api/v1/agents"
                         :model-value="agentId"
-                        placeholder="Select an agent"
+                        :placeholder="t('importSnapshots.selectAgent')"
                         :class="agentError ? '[&_button]:border-destructive [&_button]:focus-visible:ring-destructive/30' : ''"
                         @update:model-value="agentId = $event"
                     />
                     <FieldError v-if="agentError">{{ agentError }}</FieldError>
                 </Field>
                 <Field>
-                    <FieldLabel for="import-dialog-password">Repository Password</FieldLabel>
+                    <FieldLabel for="import-dialog-password">{{ t('importSnapshots.repoPassword') }}</FieldLabel>
                     <Input
                         id="import-dialog-password"
                         v-model="repoPassword"
                         type="password"
                         autocomplete="off"
-                        placeholder="Restic repository password"
+                        :placeholder="t('importSnapshots.repoPasswordPlaceholder')"
                         :class="passwordError ? 'border-destructive focus-visible:ring-destructive/30' : ''"
                     />
                     <FieldError v-if="passwordError">{{ passwordError }}</FieldError>
                     <p class="text-muted-foreground text-xs">
-                        Stored on the destination so the imported snapshots can be browsed and restored.
+                        {{ t('importSnapshots.passwordNote') }}
                     </p>
                 </Field>
                 <p v-if="submitError" class="text-xs text-destructive flex items-start gap-1.5">
@@ -147,12 +148,12 @@ const onSubmit = handleSubmit(async (values) => {
             </form>
 
             <DialogFooter>
-                <Button v-if="summary" @click="onOpenChange(false)">Done</Button>
+                <Button v-if="summary" @click="onOpenChange(false)">{{ t('importSnapshots.done') }}</Button>
                 <template v-else>
-                    <Button variant="outline" :disabled="submitting" @click="onOpenChange(false)">Cancel</Button>
+                    <Button variant="outline" :disabled="submitting" @click="onOpenChange(false)">{{ t('common.cancel') }}</Button>
                     <Button :disabled="submitting" @click="onSubmit()">
                         <Loader2 v-if="submitting" class="mr-2 size-4 animate-spin" />
-                        {{ submitting ? 'Importing…' : 'Import' }}
+                        {{ submitting ? t('importSnapshots.importing') : t('importSnapshots.import') }}
                     </Button>
                 </template>
             </DialogFooter>

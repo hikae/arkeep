@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import {
     Table,
@@ -43,6 +44,7 @@ import {
 } from '@lucide/vue'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { api, apiErrorMessage } from '@/services/api'
+import { scheduleLabel } from '@/lib/schedule'
 import type { Policy, ApiResponse, TriggerResponse } from '@/types'
 import PolicySheet from '@/components/policies/PolicySheet.vue'
 import SortableTableHead from '@/components/shared/SortableTableHead.vue'
@@ -59,6 +61,7 @@ interface PolicyListResponse {
 
 const router = useRouter()
 const authStore = useAuthStore()
+const { t } = useI18n()
 
 const policies = ref<Policy[]>([])
 const total = ref(0)
@@ -91,26 +94,6 @@ const triggeringId = ref<string | null>(null)
 // Helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Returns a human-readable label for common cron expressions.
- * Falls back to the raw expression for custom schedules.
- */
-function scheduleLabel(cron: string): string {
-    const presets: Record<string, string> = {
-        '0 * * * *': 'Hourly',
-        '0 2 * * *': 'Daily at 02:00',
-        '0 0 * * *': 'Daily at midnight',
-        '0 2 * * 0': 'Weekly (Sun)',
-        '0 2 * * 1': 'Weekly (Mon)',
-        '0 2 1 * *': 'Monthly',
-        '@daily': 'Daily',
-        '@weekly': 'Weekly',
-        '@monthly': 'Monthly',
-        '@hourly': 'Hourly',
-    }
-    return presets[cron] ?? cron
-}
-
 // ---------------------------------------------------------------------------
 // Data fetching
 // ---------------------------------------------------------------------------
@@ -123,7 +106,7 @@ async function fetchPolicies() {
         policies.value = res.data.items
         total.value = res.data.total
     } catch (e: any) {
-        error.value = apiErrorMessage(e, 'Failed to load policies')
+        error.value = apiErrorMessage(e, t('policies.loadFailed'))
     } finally {
         loading.value = false
     }
@@ -177,7 +160,7 @@ async function triggerPolicy(policy: Policy) {
         const res = await api<ApiResponse<TriggerResponse>>(`/api/v1/policies/${policy.id}/trigger`, { method: 'POST' })
         router.push({ name: 'job-detail', params: { id: res.data.job_id } })
     } catch (e: any) {
-        error.value = apiErrorMessage(e, `Failed to trigger "${policy.name}"`)
+        error.value = apiErrorMessage(e, t('policies.triggerFailed', { name: policy.name }))
     } finally {
         triggeringId.value = null
     }
@@ -204,7 +187,7 @@ async function confirmDelete() {
         }
         await fetchPolicies()
     } catch (e: any) {
-        error.value = apiErrorMessage(e, 'Failed to delete policy')
+        error.value = apiErrorMessage(e, t('policies.deleteFailed'))
     } finally {
         deleteLoading.value = false
     }
@@ -223,18 +206,18 @@ onMounted(fetchPolicies)
         <!-- Header -->
         <div class="flex items-center justify-between">
             <div>
-                <h1 class="text-2xl font-semibold tracking-tight">Policies</h1>
+                <h1 class="text-2xl font-semibold tracking-tight">{{ t('policies.title') }}</h1>
                 <p class="mt-1 text-sm text-muted-foreground">
-                    Manage backup policies — what to back up, when, and where.
+                    {{ t('policies.subtitle') }}
                 </p>
             </div>
             <div class="flex items-center gap-2">
-                <Button variant="outline" size="icon" aria-label="Refresh" :disabled="loading" @click="fetchPolicies">
+                <Button variant="outline" size="icon" :aria-label="t('common.refresh')" :disabled="loading" @click="fetchPolicies">
                     <RefreshCw class="w-4 h-4" :class="{ 'animate-spin': loading }" />
                 </Button>
                 <Button v-if="authStore.isAdmin" @click="openCreate">
                     <Plus class="w-4 h-4" />
-                    New Policy
+                    {{ t('policies.newPolicy') }}
                 </Button>
             </div>
         </div>
@@ -249,12 +232,12 @@ onMounted(fetchPolicies)
             <Table>
                 <TableHeader>
                     <TableRow>
-                        <SortableTableHead label="Name" :active="sortKey === 'name'" :order="sortOrder"
+                        <SortableTableHead :label="t('policies.colName')" :active="sortKey === 'name'" :order="sortOrder"
                             @toggle="toggleSort('name')" />
-                        <SortableTableHead label="Agent" :active="sortKey === 'agent'" :order="sortOrder"
+                        <SortableTableHead :label="t('policies.colAgent')" :active="sortKey === 'agent'" :order="sortOrder"
                             @toggle="toggleSort('agent')" />
-                        <TableHead>Schedule</TableHead>
-                        <SortableTableHead label="Status" :active="sortKey === 'status'" :order="sortOrder"
+                        <TableHead>{{ t('policies.colSchedule') }}</TableHead>
+                        <SortableTableHead :label="t('policies.colStatus')" :active="sortKey === 'status'" :order="sortOrder"
                             @toggle="toggleSort('status', 'desc')" />
                         <TableHead class="w-13" />
                     </TableRow>
@@ -279,14 +262,14 @@ onMounted(fetchPolicies)
                                         <ShieldCheck class="w-10 h-10 text-muted-foreground" />
                                     </div>
                                     <div>
-                                        <p class="font-medium">No policies configured</p>
+                                        <p class="font-medium">{{ t('policies.empty') }}</p>
                                         <p class="mt-1 text-sm text-muted-foreground">
-                                            Create a policy to start scheduling backups.
+                                            {{ t('policies.emptyDetail') }}
                                         </p>
                                     </div>
                                     <Button v-if="authStore.isAdmin" size="sm" @click="openCreate">
                                         <Plus class="w-4 h-4" />
-                                        New Policy
+                                        {{ t('policies.newPolicy') }}
                                     </Button>
                                 </div>
                             </TableCell>
@@ -299,7 +282,7 @@ onMounted(fetchPolicies)
                             class="cursor-pointer hover:bg-muted/50"
                             tabindex="0"
                             role="link"
-                            :aria-label="`View policy ${policy.name}`"
+                            :aria-label="t('policies.viewPolicy', { name: policy.name })"
                             @click="router.push(`/policies/${policy.id}`)"
                             @keyup.enter="router.push(`/policies/${policy.id}`)">
                             <TableCell class="font-medium">{{ policy.name }}</TableCell>
@@ -313,7 +296,7 @@ onMounted(fetchPolicies)
                             </TableCell>
                             <TableCell>
                                 <Badge :variant="policy.enabled ? 'default' : 'secondary'">
-                                    {{ policy.enabled ? 'Enabled' : 'Disabled' }}
+                                    {{ policy.enabled ? t('common.enabled') : t('common.disabled') }}
                                 </Badge>
                             </TableCell>
 
@@ -324,7 +307,7 @@ onMounted(fetchPolicies)
                                     <DropdownMenuTrigger as-child>
                                         <Button variant="ghost" size="icon" class="w-8 h-8">
                                             <MoreHorizontal class="w-4 h-4" />
-                                            <span class="sr-only">Open actions</span>
+                                            <span class="sr-only">{{ t('policies.openActions') }}</span>
                                         </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end">
@@ -336,27 +319,27 @@ onMounted(fetchPolicies)
                                                         :disabled="!policy.enabled || triggeringId === policy.id"
                                                         @click="triggerPolicy(policy)">
                                                         <Play class="w-4 h-4 mr-2" />
-                                                        Run Now
+                                                        {{ t('policies.runNow') }}
                                                     </DropdownMenuItem>
                                                 </div>
                                             </TooltipTrigger>
-                                            <TooltipContent side="left">Enable the policy to run a backup.</TooltipContent>
+                                            <TooltipContent side="left">{{ t('policies.enableToRun') }}</TooltipContent>
                                         </Tooltip>
                                         <DropdownMenuSeparator v-if="authStore.isAdmin" />
                                         <DropdownMenuItem @click="openEditSheet(policy)">
                                             <PencilLine class="w-4 h-4 mr-2" />
-                                            Edit
+                                            {{ t('common.edit') }}
                                         </DropdownMenuItem>
                                         <DropdownMenuItem @click="openCloneSheet(policy)">
                                             <Copy class="w-4 h-4 mr-2" />
-                                            Duplicate
+                                            {{ t('policies.duplicate') }}
                                         </DropdownMenuItem>
                                         <DropdownMenuSeparator v-if="authStore.isAdmin" />
                                         <DropdownMenuItem v-if="authStore.isAdmin"
                                             class="text-destructive focus:text-destructive"
                                             @click="openDeleteDialog(policy)">
                                             <Trash2 class="w-4 h-4 mr-2" />
-                                            Delete
+                                            {{ t('common.delete') }}
                                         </DropdownMenuItem>
                                     </DropdownMenuContent>
                                 </DropdownMenu>
@@ -370,15 +353,19 @@ onMounted(fetchPolicies)
         <!-- Pagination -->
         <div v-if="!loading && totalPages > 1" class="flex items-center justify-between text-sm text-muted-foreground">
             <span>
-                Showing {{ offset + 1 }}–{{ Math.min(offset + pageSize, total) }} of {{ total }} policies
+                {{ t('policies.showing', {
+                    from: offset + 1,
+                    to: Math.min(offset + pageSize, total),
+                    total,
+                }) }}
             </span>
             <div class="flex items-center gap-2">
                 <Button variant="outline" size="sm" :disabled="page === 1" @click="goToPage(page - 1)">
-                    Previous
+                    {{ t('agents.previous') }}
                 </Button>
                 <span class="px-2">{{ page }} / {{ totalPages }}</span>
                 <Button variant="outline" size="sm" :disabled="page === totalPages" @click="goToPage(page + 1)">
-                    Next
+                    {{ t('agents.next') }}
                 </Button>
             </div>
         </div>
@@ -392,21 +379,18 @@ onMounted(fetchPolicies)
     <AlertDialog :open="deleteDialogOpen" @update:open="deleteDialogOpen = $event">
         <AlertDialogContent>
             <AlertDialogHeader>
-                <AlertDialogTitle>Delete policy?</AlertDialogTitle>
+                <AlertDialogTitle>{{ t('policies.deleteTitle') }}</AlertDialogTitle>
                 <AlertDialogDescription>
                     <span v-if="policyToDelete">
-                        <strong>{{ policyToDelete.name }}</strong> will be deleted and its stored repository password erased.
-                        All scheduled runs for this policy will be removed.
-                        Its existing snapshots stay listed, and the backup data on the storage is not touched.
-                        This action cannot be undone.
+                        {{ t('policies.deleteBody', { name: policyToDelete.name }) }}
                     </span>
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-                <AlertDialogCancel :disabled="deleteLoading">Cancel</AlertDialogCancel>
+                <AlertDialogCancel :disabled="deleteLoading">{{ t('common.cancel') }}</AlertDialogCancel>
                 <AlertDialogAction variant="destructive"
                     :disabled="deleteLoading" @click="confirmDelete">
-                    {{ deleteLoading ? 'Deleting…' : 'Delete' }}
+                    {{ deleteLoading ? t('policies.deleting') : t('common.delete') }}
                 </AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>

@@ -9,8 +9,9 @@
 // The request response is intentionally generic regardless of whether the email
 // maps to a local account, so this page never reveals which addresses exist.
 
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useForm, useField } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
 import { z } from 'zod'
@@ -27,13 +28,18 @@ import {
 import { Input } from '@/components/ui/input'
 import { AlertCircle, ArrowLeft, CheckCircle2, Loader2, MailWarning, Moon, Sun } from '@lucide/vue'
 import { useTheme } from '@/composables/useTheme'
+import LocaleToggle from '@/components/shared/LocaleToggle.vue'
+
+const { t } = useI18n()
 
 // ─── Validation schema ────────────────────────────────────────────────────────
 
-const schema = toTypedSchema(
-    z.object({
-        email: z.email('Enter a valid email address'),
-    }),
+const schema = computed(() =>
+    toTypedSchema(
+        z.object({
+            email: z.email(t('validation.emailInvalid')),
+        }),
+    ),
 )
 
 const { handleSubmit, isSubmitting } = useForm({
@@ -80,7 +86,7 @@ const onSubmit = handleSubmit(async (values) => {
         })
         submitted.value = true
     } catch {
-        serverError.value = 'Something went wrong. Please try again later.'
+        serverError.value = t('auth.errorGeneric')
     }
 })
 
@@ -100,13 +106,16 @@ onMounted(fetchStatus)
             maskImage: 'radial-gradient(ellipse 60% 60% at 50% 50%, #000 30%, transparent 70%)',
         }" />
 
-        <!-- Theme toggle -->
-        <Button variant="ghost" size="icon"
-            class="absolute z-10 top-4 right-4 text-muted-foreground hover:text-foreground" :aria-label="modeLabel"
-            @click="cycle()">
-            <Sun v-if="isDark" class="size-4" />
-            <Moon v-else class="size-4" />
-        </Button>
+        <!-- Theme and language toggles -->
+        <div class="absolute z-10 top-4 right-4 flex items-center gap-2">
+            <LocaleToggle />
+            <Button variant="ghost" size="icon"
+                class="text-muted-foreground hover:text-foreground" :aria-label="modeLabel"
+                @click="cycle()">
+                <Sun v-if="isDark" class="size-4" />
+                <Moon v-else class="size-4" />
+            </Button>
+        </div>
 
         <div class="relative z-10 w-full max-w-sm">
             <Card>
@@ -114,9 +123,9 @@ onMounted(fetchStatus)
                     <FieldGroup>
                         <!-- Title -->
                         <div class="flex flex-col items-center gap-2 text-center">
-                            <h1 class="text-2xl font-bold">Forgot password</h1>
+                            <h1 class="text-2xl font-bold">{{ t('auth.forgotPassword.title') }}</h1>
                             <p class="text-sm text-muted-foreground text-balance">
-                                Reset the password for your local Arkeep account
+                                {{ t('auth.forgotPassword.subtitle') }}
                             </p>
                         </div>
 
@@ -129,9 +138,7 @@ onMounted(fetchStatus)
                         <Alert v-else-if="smtpConfigured === false">
                             <MailWarning class="size-4" />
                             <AlertDescription>
-                                This instance does not have an SMTP server configured, so password
-                                reset emails cannot be sent. Please contact your system administrator
-                                to reset your password.
+                                {{ t('auth.forgotPassword.smtpNotConfigured') }}
                             </AlertDescription>
                         </Alert>
 
@@ -139,9 +146,7 @@ onMounted(fetchStatus)
                         <Alert v-else-if="baseUrlConfigured === false">
                             <MailWarning class="size-4" />
                             <AlertDescription>
-                                Password reset emails are disabled because this instance does not have
-                                its external URL configured (ARKEEP_BASE_URL). Please contact your
-                                system administrator to reset your password.
+                                {{ t('auth.forgotPassword.baseUrlNotConfigured') }}
                             </AlertDescription>
                         </Alert>
 
@@ -149,8 +154,7 @@ onMounted(fetchStatus)
                         <Alert v-else-if="submitted">
                             <CheckCircle2 class="size-4" />
                             <AlertDescription>
-                                If an account with that email exists, a password reset link has been
-                                sent. Check your inbox and follow the instructions.
+                                {{ t('auth.forgotPassword.submitted') }}
                             </AlertDescription>
                         </Alert>
 
@@ -170,8 +174,8 @@ onMounted(fetchStatus)
 
                                 <!-- Email -->
                                 <Field>
-                                    <FieldLabel for="email">Email</FieldLabel>
-                                    <Input id="email" v-model="emailValue" type="email" placeholder="m@example.com"
+                                    <FieldLabel for="email">{{ t('common.email') }}</FieldLabel>
+                                    <Input id="email" v-model="emailValue" type="email" :placeholder="t('auth.emailPlaceholder')"
                                         autocomplete="email" autofocus spellcheck="false"
                                         :class="emailError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                                     <FieldError v-if="emailError">{{ emailError }}</FieldError>
@@ -181,7 +185,7 @@ onMounted(fetchStatus)
                                 <Field>
                                     <Button type="submit" class="w-full" :disabled="isSubmitting">
                                         <Loader2 v-if="isSubmitting" class="size-4 animate-spin" />
-                                        {{ isSubmitting ? 'Sending…' : 'Send reset link' }}
+                                        {{ isSubmitting ? t('auth.forgotPassword.sending') : t('auth.forgotPassword.sendResetLink') }}
                                     </Button>
                                 </Field>
                             </FieldGroup>
@@ -191,7 +195,7 @@ onMounted(fetchStatus)
                         <RouterLink to="/login"
                             class="inline-flex items-center justify-center gap-1 text-sm text-muted-foreground hover:text-foreground">
                             <ArrowLeft class="size-4" />
-                            Back to login
+                            {{ t('auth.forgotPassword.backToLogin') }}
                         </RouterLink>
                     </FieldGroup>
                 </CardContent>
@@ -201,6 +205,6 @@ onMounted(fetchStatus)
 
     <!-- Footer -->
     <p class="fixed bottom-0 left-0 right-0 text-center text-xs text-muted-foreground pb-6">
-        Arkeep — open source backup management
+        {{ t('auth.footer') }}
     </p>
 </template>

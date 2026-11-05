@@ -20,6 +20,7 @@
 import { ofetch, FetchError, type FetchOptions } from 'ofetch'
 import { useAuthStore } from '@/stores/auth'
 import { router } from '@/router'
+import { i18n } from '@/i18n'
 
 // Shared in-flight refresh promise — deduplicates concurrent refresh attempts.
 let refreshPromise: Promise<boolean> | null = null
@@ -89,7 +90,7 @@ export async function api<T = unknown>(
     router.push('/login')
     // Throw so the original caller's await rejects cleanly rather than
     // silently returning undefined.
-    throw new Error('Session expired')
+    throw new Error(i18n.global.t('errors.sessionExpired'))
   }
 
   // ── Retry with new token ────────────────────────────────────────────────────

@@ -13,6 +13,7 @@ import {
     SkipForward,
     XCircle,
 } from '@lucide/vue'
+import { i18n } from '@/i18n'
 
 // ── Status helpers ────────────────────────────────────────────────────────────
 
@@ -51,7 +52,17 @@ export function statusClass(status: string): string {
 }
 
 export function statusLabel(status: string): string {
+    const key = `status.${status}`
+    const { t, te } = i18n.global
+    if (te(key)) return t(key)
     return status.charAt(0).toUpperCase() + status.slice(1)
+}
+
+/** Returns the translated label of a job type, or the raw value if unknown. */
+export function jobTypeLabel(type: string): string {
+    const key = `jobType.${type}`
+    const { t, te } = i18n.global
+    return te(key) ? t(key) : type
 }
 
 /** Returns the Lucide icon component for a given job status. */
@@ -74,7 +85,7 @@ export function statusIcon(status: string) {
 /** Locale-formatted date+time string, or "—" if null. */
 export function formatDate(iso: string | null | undefined): string {
     if (!iso) return '—'
-    return new Date(iso).toLocaleString(undefined, {
+    return new Date(iso).toLocaleString(i18n.global.locale.value, {
         dateStyle: 'medium',
         timeStyle: 'short',
     })
@@ -90,11 +101,12 @@ export function formatDuration(startedAt: string | null | undefined, finishedAt:
     const ms = end - new Date(startedAt).getTime()
     if (ms < 0) return '—'
     const s = Math.floor(ms / 1000)
-    if (s < 60) return `${s}s`
+    const { t } = i18n.global
+    if (s < 60) return t('time.seconds', { n: s })
     const m = Math.floor(s / 60)
-    if (m < 60) return `${m}m ${s % 60}s`
+    if (m < 60) return t('time.minutesSeconds', { m, s: s % 60 })
     const h = Math.floor(m / 60)
-    return `${h}h ${m % 60}m`
+    return t('time.hoursMinutes', { h, m: m % 60 })
 }
 
 /** Human-readable byte size string. */

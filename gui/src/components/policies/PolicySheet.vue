@@ -53,11 +53,13 @@ import {
 } from '@lucide/vue'
 import { useField, useFieldArray, useForm } from 'vee-validate'
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useDebounceFn } from '@vueuse/core'
 import * as z from 'zod'
 import { integerInRange, isHttpURL, MAX_HOOK_TIMEOUT_SECS, MIN_REPO_PASSWORD_LENGTH } from '@/lib/validation'
 
 const authStore = useAuthStore()
+const { t } = useI18n()
 
 // ---------------------------------------------------------------------------
 // Props / emits
@@ -173,13 +175,13 @@ async function fetchVolumes() {
   } catch (err: any) {
     const code = err?.data?.error?.code
     if (code === 'conflict') {
-      volumesError.value = 'Agent is not connected'
+      volumesError.value = t('policySheet.volumeAgentOffline')
     } else if (code === 'docker_unavailable') {
-      volumesError.value = 'Docker is not available on this agent'
+      volumesError.value = t('policySheet.volumeDockerUnavailable')
     } else if (code === 'timeout') {
-      volumesError.value = 'Agent did not respond in time'
+      volumesError.value = t('policySheet.volumeTimeout')
     } else {
-      volumesError.value = 'Could not load volumes'
+      volumesError.value = t('policySheet.volumeLoadFailed')
     }
   } finally {
     volumesLoading.value = false
@@ -212,27 +214,25 @@ const sourceItemSchema = z.object({
   label: z.string().optional(),
 }).superRefine((val, ctx) => {
   if (val.type === 'directory' && (!val.path || val.path.trim() === '')) {
-    ctx.addIssue({ code: 'custom', path: ['path'], message: 'Path is required' })
+    ctx.addIssue({ code: 'custom', path: ['path'], message: t('policySheet.validation.pathRequired') })
   }
   // Cosmetic only — the real enforcement is server- and agent-side (a path
   // starting with "-" would otherwise be parsed by restic as a flag).
   if (val.type === 'directory' && val.path.startsWith('-')) {
-    ctx.addIssue({ code: 'custom', path: ['path'], message: 'Path must not start with "-"' })
+    ctx.addIssue({ code: 'custom', path: ['path'], message: t('policySheet.validation.pathNoDash') })
   }
   if (val.type === 'command') {
     if (!val.path || val.path.trim() === '') {
-      ctx.addIssue({ code: 'custom', path: ['path'], message: 'Command is required' })
+      ctx.addIssue({ code: 'custom', path: ['path'], message: t('policySheet.validation.commandRequired') })
     }
     // label is the source name: it becomes the restic retention tag suffix
     // and the filename inside the snapshot, so the server enforces this
     // charset too.
     if (!val.label || !commandSourceNameRe.test(val.label)) {
-      ctx.addIssue({ code: 'custom', path: ['label'], message: 'Name is required (letters, digits, ".", "_", "-")' })
+      ctx.addIssue({ code: 'custom', path: ['label'], message: t('policySheet.validation.sourceNameRequired') })
     }
   }
 })
-
-const hookTimeoutSchema = integerInRange(0, MAX_HOOK_TIMEOUT_SECS)
 
 // The timeout is checked only on an enabled hook: a disabled one is hidden
 // and never sent.
@@ -246,15 +246,15 @@ const hookFieldSchema = z.object({
   timeout_secs: z.unknown(),
 }).superRefine((hook, ctx) => {
   if (!hook.enabled) return
-  const result = hookTimeoutSchema.safeParse(hook.timeout_secs)
+  const result = integerInRange(0, MAX_HOOK_TIMEOUT_SECS).safeParse(hook.timeout_secs)
   if (!result.success) {
     ctx.addIssue({ code: 'custom', path: ['timeout_secs'], message: result.error.issues[0]!.message })
   }
 })
 
 const schema = z.object({
-  name: z.string().min(1, 'Name is required'),
-  agent_id: z.string().min(1, 'Agent is required'),
+  name: z.string().min(1, { error: () => t('validation.nameRequired') }),
+  agent_id: z.string().min(1, { error: () => t('policySheet.validation.agentRequired') }),
   enabled: z.boolean(),
 
   // Write-only — required on create, optional on edit (blank = keep existing).
@@ -264,12 +264,12 @@ const schema = z.object({
   // selected destinations' own stored password instead of the fields above.
   use_destination_password: z.boolean(),
 
-  schedule: z.string().min(1, 'Schedule is required'),
+  schedule: z.string().min(1, { error: () => t('policySheet.validation.scheduleRequired') }),
 
-  sources: z.array(sourceItemSchema).min(1, 'At least one source is required'),
+  sources: z.array(sourceItemSchema).min(1, { error: () => t('policySheet.validation.sourceRequired') }),
 
   // Destination IDs in priority order (index 0 = priority 1).
-  ordered_destination_ids: z.array(z.string()).min(1, 'At least one destination is required'),
+  ordered_destination_ids: z.array(z.string()).min(1, { error: () => t('policySheet.validation.destinationRequired') }),
 
   hook_pre: hookFieldSchema,
   hook_post: hookFieldSchema,
@@ -278,7 +278,7 @@ const schema = z.object({
   resume_interrupted: z.boolean(),
   notify_on_success: z.enum(['inherit', 'always', 'never']),
   notify_on_failure: z.enum(['inherit', 'always', 'never']),
-  healthcheck_url: z.string().trim().refine(v => v === '' || isHttpURL(v), 'Must be an http(s) URL'),
+  healthcheck_url: z.string().trim().refine(v => v === '' || isHttpURL(v), { error: () => t('policySheet.validation.httpUrl') }),
 }).superRefine((data, ctx) => {
   // A docker-volume row keeps its ticked volumes outside the form values
   // (selectedVolumes); a name typed in the manual fallback input is its path.
@@ -286,7 +286,7 @@ const schema = z.object({
     if (s.type !== 'docker-volume') return
     const ticked = selectedVolumes.value[String(idx)]?.size ?? 0
     if (ticked === 0 && !s.path.trim()) {
-      ctx.addIssue({ code: 'custom', path: ['sources', idx, 'path'], message: 'Select at least one volume or enter its name' })
+      ctx.addIssue({ code: 'custom', path: ['sources', idx, 'path'], message: t('policySheet.validation.volumeRequired') })
     }
   })
   if (!isEdit.value) {
@@ -296,14 +296,14 @@ const schema = z.object({
       ctx.addIssue({
         code: "custom",
         path: ['repo_password'],
-        message: `Repository password must be at least ${MIN_REPO_PASSWORD_LENGTH} characters`,
+        message: t('policySheet.validation.repositoryPasswordMin', { min: MIN_REPO_PASSWORD_LENGTH }),
       })
     }
     if (data.repo_password !== data.repo_password_confirm) {
       ctx.addIssue({
         code: "custom",
         path: ['repo_password_confirm'],
-        message: 'Passwords do not match',
+        message: t('validation.passwordsDoNotMatch'),
       })
     }
   }
@@ -398,14 +398,14 @@ function removeSourceRow(idx: number) {
 // Schedule
 const { value: scheduleValue, errorMessage: scheduleError } = useField<string>('schedule')
 
-const SCHEDULE_PRESETS = [
-  { label: 'Every hour', value: '0 * * * *' },
-  { label: 'Daily at 02:00', value: '0 2 * * *' },
-  { label: 'Daily at midnight', value: '0 0 * * *' },
-  { label: 'Weekly (Sunday)', value: '0 2 * * 0' },
-  { label: 'Weekly (Monday)', value: '0 2 * * 1' },
-  { label: 'Monthly', value: '0 2 1 * *' },
-]
+const SCHEDULE_PRESETS = computed(() => [
+  { label: t('policySheet.schedulePresets.everyHour'), value: '0 * * * *' },
+  { label: t('policySheet.schedulePresets.dailyAt'), value: '0 2 * * *' },
+  { label: t('policySheet.schedulePresets.dailyAtMidnight'), value: '0 0 * * *' },
+  { label: t('policySheet.schedulePresets.weeklySunday'), value: '0 2 * * 0' },
+  { label: t('policySheet.schedulePresets.weeklyMonday'), value: '0 2 * * 1' },
+  { label: t('policySheet.schedulePresets.monthly'), value: '0 2 1 * *' },
+])
 
 const selectedPreset = ref('')
 
@@ -484,11 +484,11 @@ function repoCheckStatusLabel(destId: string): string {
   const check = repoCheckByDest.value[destId]
   if (!check) return ''
   switch (check.status) {
-    case 'checking': return 'checking for an existing repository…'
-    case 'no_repo': return 'no existing repository — one will be created'
-    case 'ok': return 'existing repository found, password verified'
-    case 'wrong_password': return check.message || 'a repository already exists here with a different password'
-    case 'unknown': return check.message || 'could not verify (agent unreachable)'
+    case 'checking': return t('policySheet.repoCheckChecking')
+    case 'no_repo': return t('policySheet.repoCheckNoRepo')
+    case 'ok': return t('policySheet.repoCheckOk')
+    case 'wrong_password': return check.message || t('policySheet.repoCheckWrongPassword')
+    case 'unknown': return check.message || t('policySheet.repoCheckUnknown')
   }
 }
 
@@ -508,7 +508,7 @@ async function runRepoChecks() {
       )
       repoCheckByDest.value = { ...repoCheckByDest.value, [id]: { status: res.data.status, message: res.data.message } }
     } catch (e: any) {
-      repoCheckByDest.value = { ...repoCheckByDest.value, [id]: { status: 'unknown', message: e?.data?.error?.message ?? 'could not verify' } }
+      repoCheckByDest.value = { ...repoCheckByDest.value, [id]: { status: 'unknown', message: e?.data?.error?.message ?? t('policySheet.couldNotVerify') } }
     }
   }))
 }
@@ -574,15 +574,15 @@ async function sendTestPing() {
     await api('/api/v1/policies/healthcheck/test', { method: 'POST', body: { url: (healthcheckURL.value ?? '').trim() } })
     hcTestState.value = 'ok'
   } catch (e: unknown) {
-    hcTestError.value = apiErrorMessage(e, 'Test ping failed')
+    hcTestError.value = apiErrorMessage(e, t('policySheet.testPingFailed'))
     hcTestState.value = 'error'
   }
 }
 
-const NOTIFY_OVERRIDE_OPTIONS: { value: NotifyOverride; label: string }[] = [
-  { value: 'inherit', label: 'Use global setting' },
-  { value: 'always', label: 'Always' },
-  { value: 'never', label: 'Never' },
+const NOTIFY_OVERRIDE_OPTIONS: { value: NotifyOverride; labelKey: string }[] = [
+  { value: 'inherit', labelKey: 'policySheet.notifyInherit' },
+  { value: 'always', labelKey: 'policySheet.notifyAlways' },
+  { value: 'never', labelKey: 'policySheet.notifyNever' },
 ]
 
 // ---------------------------------------------------------------------------
@@ -747,7 +747,7 @@ function populateForm(p: Policy, asClone = false) {
   setValues({
     // Clone starts from a suggested "Copy of …" name; the repo password is
     // never copied (blanked below) so the user must re-enter it.
-    name: asClone ? `Copy of ${p.name}` : p.name,
+    name: asClone ? t('policySheet.cloneName', { name: p.name }) : p.name,
     agent_id: p.agent_name ? p.agent_id : '',
     enabled: p.enabled,
     repo_password: '',
@@ -773,7 +773,7 @@ function populateForm(p: Policy, asClone = false) {
     healthcheck_url: p.healthcheck_url ?? '',
   } as unknown as FormValues)
 
-  const match = SCHEDULE_PRESETS.find(s => s.value === p.schedule)
+  const match = SCHEDULE_PRESETS.value.find(s => s.value === p.schedule)
   selectedPreset.value = match?.value ?? ''
 
   // Pre-fetch volumes if any source row is docker-volume type.
@@ -807,7 +807,7 @@ const onSubmit = handleSubmit(async (values) => {
   if (!isEdit.value && !values.use_destination_password) {
     const hasWrongPassword = Object.values(repoCheckByDest.value).some(c => c.status === 'wrong_password')
     if (hasWrongPassword) {
-      submitError.value = 'One or more selected destinations already have a repository with a different password. Fix the password above before creating this policy.'
+      submitError.value = t('policySheet.wrongPasswordSubmit')
       return
     }
   }
@@ -881,7 +881,7 @@ const onSubmit = handleSubmit(async (values) => {
     emit('update:open', false)
     emit('saved')
   } catch (e: any) {
-    submitError.value = apiErrorMessage(e, 'Failed to save policy')
+    submitError.value = apiErrorMessage(e, t('policySheet.saveFailed'))
   } finally {
     submitting.value = false
   }
@@ -899,9 +899,9 @@ function onOpenChange(value: boolean) {
   <Sheet :open="props.open" @update:open="onOpenChange">
     <SheetContent class="sm:max-w-2xl overflow-y-auto">
       <SheetHeader>
-        <SheetTitle>{{ isEdit ? 'Edit Policy' : isClone ? 'Clone Policy' : 'New Policy' }}</SheetTitle>
+        <SheetTitle>{{ isEdit ? t('policySheet.editTitle') : isClone ? t('policySheet.cloneTitle') : t('policySheet.newTitle') }}</SheetTitle>
         <SheetDescription>
-          {{ isEdit ? 'Update the policy settings.' : isClone ? 'Review the copied settings and set a repository password.' : 'Configure a new backup policy.' }}
+          {{ isEdit ? t('policySheet.editDescription') : isClone ? t('policySheet.cloneDescription') : t('policySheet.newDescription') }}
         </SheetDescription>
       </SheetHeader>
 
@@ -923,8 +923,8 @@ function onOpenChange(value: boolean) {
 
           <!-- Name -->
           <Field>
-            <FieldLabel for="policy-name">Name</FieldLabel>
-            <Input id="policy-name" v-model="nameValue" placeholder="e.g. Daily Database Backup"
+            <FieldLabel for="policy-name">{{ t('policySheet.name') }}</FieldLabel>
+            <Input id="policy-name" v-model="nameValue" :placeholder="t('policySheet.namePlaceholder')"
               autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true"
               :class="nameError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
             <FieldError v-if="nameError">{{ nameError }}</FieldError>
@@ -932,12 +932,12 @@ function onOpenChange(value: boolean) {
 
           <!-- Agent -->
           <Field>
-            <FieldLabel for="agent">Agent</FieldLabel>
+            <FieldLabel for="agent">{{ t('policySheet.agent') }}</FieldLabel>
             <AsyncCombobox
               endpoint="/api/v1/agents"
               :model-value="agentValue ?? ''"
               :initial-label="props.policy?.agent_name ?? props.cloneFrom?.agent_name"
-              placeholder="Select an agent…"
+              :placeholder="t('policySheet.selectAgent')"
               :class="agentError ? '[&_button]:border-destructive [&_button]:focus-visible:ring-destructive/30' : ''"
               @update:model-value="agentValue = $event"
               @update:item="onAgentSelected"
@@ -951,22 +951,22 @@ function onOpenChange(value: boolean) {
                          2. SOURCES
                     ══════════════════════════════════════════════════ -->
           <div class="flex items-center justify-between">
-            <p class="text-sm font-medium">Sources</p>
+            <p class="text-sm font-medium">{{ t('policySheet.sources') }}</p>
             <Button type="button" variant="outline" size="sm" @click="addSource">
               <Plus class="w-3.5 h-3.5" />
-              Add Source
+              {{ t('policySheet.addSource') }}
             </Button>
           </div>
 
           <div v-if="sourceFields.length === 0"
             class="rounded-md border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
-            No sources added. Click <strong>Add Source</strong> to begin.
+            {{ t('policySheet.noSources') }}
           </div>
           <FieldError v-if="errors.sources">{{ errors.sources }}</FieldError>
 
           <div v-for="(field, idx) in sourceFields" :key="field.key" class="flex flex-col gap-3 rounded-md border p-3">
             <div class="flex items-center justify-between">
-              <span class="text-xs font-medium text-muted-foreground">Source {{ idx + 1 }}</span>
+              <span class="text-xs font-medium text-muted-foreground">{{ t('policySheet.sourceNumber', { n: idx + 1 }) }}</span>
               <Button type="button" variant="ghost" size="icon"
                 class="w-6 h-6 text-muted-foreground hover:text-destructive" @click="removeSourceRow(idx)">
                 <Trash2 class="w-3.5 h-3.5" />
@@ -975,23 +975,23 @@ function onOpenChange(value: boolean) {
 
             <!-- Type — full width -->
             <div class="flex flex-col gap-1.5">
-              <Label :for="`source-type-${idx}`" class="text-sm">Type</Label>
+              <Label :for="`source-type-${idx}`" class="text-sm">{{ t('policySheet.type') }}</Label>
               <Select :model-value="(field.value as any).type as string"
                 @update:model-value="(v) => { (field.value as any).type = v as SourceTypeValue; onSourceTypeChange(idx, v as string) }">
                 <SelectTrigger :id="`source-type-${idx}`" class="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="directory">Directory</SelectItem>
+                  <SelectItem value="directory">{{ t('policySheet.directory') }}</SelectItem>
                   <SelectItem value="docker-volume"
                     :disabled="selectedAgent !== null && !selectedAgent.docker_available">
-                    Docker Volume
+                    {{ t('policySheet.dockerVolume') }}
                     <span v-if="selectedAgent && !selectedAgent.docker_available"
-                      class="text-xs text-muted-foreground ml-1">(unavailable)</span>
+                      class="text-xs text-muted-foreground ml-1">{{ t('policySheet.unavailable') }}</span>
                   </SelectItem>
                   <SelectItem value="command" :disabled="!authStore.isAdmin">
-                    Command (stdin)
-                    <span v-if="!authStore.isAdmin" class="text-xs text-muted-foreground ml-1">(admins only)</span>
+                    {{ t('policySheet.commandStdin') }}
+                    <span v-if="!authStore.isAdmin" class="text-xs text-muted-foreground ml-1">{{ t('policySheet.adminsOnly') }}</span>
                   </SelectItem>
                 </SelectContent>
               </Select>
@@ -1002,19 +1002,19 @@ function onOpenChange(value: boolean) {
               class="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30">
               <AlertCircle class="h-4 w-4 text-amber-600 dark:text-amber-400" />
               <AlertDescription class="text-amber-800 dark:text-amber-300 text-xs">
-                Command sources run with agent process privileges. Only admins can configure them.
+                {{ t('policySheet.commandSourceWarning') }}
               </AlertDescription>
             </Alert>
 
             <!-- Label — full width -->
             <div class="flex flex-col gap-1.5">
               <Label :for="`source-label-${idx}`" class="text-sm">
-                {{ (field.value as any).type === 'command' ? 'Name' : 'Label' }}
-                <span v-if="(field.value as any).type !== 'command'" class="text-muted-foreground font-normal">(optional)</span>
+                {{ (field.value as any).type === 'command' ? t('policySheet.name') : t('policySheet.label') }}
+                <span v-if="(field.value as any).type !== 'command'" class="text-muted-foreground font-normal">{{ t('policySheet.optional') }}</span>
               </Label>
               <Input :id="`source-label-${idx}`" :model-value="(field.value as any).label as string" class="w-full"
                 :disabled="!authStore.isAdmin && (field.value as any).type === 'command'"
-                :placeholder="(field.value as any).type === 'command' ? 'e.g. postgres-dump' : 'e.g. postgres-data'"
+                :placeholder="(field.value as any).type === 'command' ? t('policySheet.sourceNamePlaceholder') : t('policySheet.labelPlaceholder')"
                 :class="sourceError(idx, 'label') ? 'border-destructive focus-visible:ring-destructive/30' : ''"
                 @update:model-value="(field.value as any).label = $event" />
               <FieldError v-if="sourceError(idx, 'label')">{{ sourceError(idx, 'label') }}</FieldError>
@@ -1024,14 +1024,14 @@ function onOpenChange(value: boolean) {
             <div class="flex flex-col gap-1.5">
               <div class="flex items-center justify-between">
                 <Label class="text-sm">
-                  {{ (field.value as any).type === 'docker-volume' ? 'Volumes'
-                    : (field.value as any).type === 'command' ? 'Command' : 'Path' }}
+                  {{ (field.value as any).type === 'docker-volume' ? t('policySheet.volumes')
+                    : (field.value as any).type === 'command' ? t('policySheet.command') : t('policySheet.path') }}
                 </Label>
                 <button v-if="(field.value as any).type === 'docker-volume' && agentValue" type="button"
                   class="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
                   :disabled="volumesLoading" @click="fetchVolumes">
                   <RefreshCw class="w-3 h-3" :class="{ 'animate-spin': volumesLoading }" />
-                  Refresh
+                  {{ t('policySheet.refresh') }}
                 </button>
               </div>
 
@@ -1062,7 +1062,7 @@ function onOpenChange(value: boolean) {
                       <!-- Ghost volume: saved in policy but not found in Docker -->
                       <span v-if="vol.notFound"
                         class="text-xs text-orange-500 dark:text-orange-400 ml-auto shrink-0 flex items-center gap-1">
-                        <AlertTriangle class="size-3" /> Not found
+                        <AlertTriangle class="size-3" /> {{ t('policySheet.notFound') }}
                       </span>
                       <span v-else class="text-xs text-muted-foreground ml-auto shrink-0">{{ vol.driver }}</span>
                     </label>
@@ -1070,10 +1070,10 @@ function onOpenChange(value: boolean) {
                   <!-- Error notice shown alongside the list (e.g. refresh failed but saved volumes still visible) -->
                   <p v-if="volumesError" class="text-xs text-destructive">
                     {{ volumesError }}.
-                    <button type="button" class="underline hover:no-underline" @click="fetchVolumes">Retry</button>
+                    <button type="button" class="underline hover:no-underline" @click="fetchVolumes">{{ t('policySheet.retry') }}</button>
                   </p>
                   <p v-if="getSelectedVolumes(String(idx)).size === 0" class="text-xs text-muted-foreground">
-                    Select at least one volume.
+                    {{ t('policySheet.selectAtLeastOneVolume') }}
                   </p>
                 </template>
 
@@ -1081,20 +1081,20 @@ function onOpenChange(value: boolean) {
                 <template v-else>
                   <div v-if="volumesLoading" class="flex items-center gap-2 text-sm text-muted-foreground py-2">
                     <Loader2 class="size-4 animate-spin" />
-                    Loading volumes…
+                    {{ t('policySheet.loadingVolumes') }}
                   </div>
                   <template v-else>
                     <p v-if="volumesError" class="text-xs text-destructive">
                       {{ volumesError }}.
-                      <button type="button" class="underline hover:no-underline" @click="fetchVolumes">Retry</button>
-                      or enter names manually below.
+                      <button type="button" class="underline hover:no-underline" @click="fetchVolumes">{{ t('policySheet.retry') }}</button>
+                      {{ t('policySheet.orEnterNames') }}
                     </p>
                     <p v-else-if="!agentValue" class="text-xs text-muted-foreground">
-                      Select an agent first to load available volumes.
+                      {{ t('policySheet.selectAgentFirst') }}
                     </p>
                     <!-- Manual fallback input (always shown when no list) -->
                     <Input :id="`source-path-${idx}`" :model-value="(field.value as any).path as string"
-                      class="font-mono w-full" placeholder="e.g. postgres_data"
+                      class="font-mono w-full" :placeholder="t('policySheet.volumePlaceholder')"
                       @update:model-value="(field.value as any).path = $event" />
                   </template>
                 </template>
@@ -1103,20 +1103,19 @@ function onOpenChange(value: boolean) {
               <!-- command: shell command whose stdout is streamed into restic -->
               <template v-else-if="(field.value as any).type === 'command'">
                 <Input :id="`source-path-${idx}`" :model-value="(field.value as any).path as string"
-                  class="font-mono w-full" placeholder="pg_dump -U postgres mydb | gzip"
+                  class="font-mono w-full" :placeholder="t('policySheet.commandPlaceholder')"
                   :disabled="!authStore.isAdmin"
                   :class="sourceError(idx, 'path') ? 'border-destructive focus-visible:ring-destructive/30' : ''"
                   @update:model-value="(field.value as any).path = $event" />
                 <p class="text-xs text-muted-foreground">
-                  Runs on the agent; its output is streamed directly into the backup — no
-                  temporary file is ever written. A non-zero exit code aborts the backup.
+                  {{ t('policySheet.commandHelp') }}
                 </p>
               </template>
 
               <!-- directory: plain path input -->
               <template v-else>
                 <Input :id="`source-path-${idx}`" :model-value="(field.value as any).path as string"
-                  class="font-mono w-full" placeholder="e.g. /var/lib/data"
+                  class="font-mono w-full" :placeholder="t('policySheet.pathPlaceholder')"
                   :class="sourceError(idx, 'path') ? 'border-destructive focus-visible:ring-destructive/30' : ''"
                   @update:model-value="(field.value as any).path = $event" />
               </template>
@@ -1129,7 +1128,7 @@ function onOpenChange(value: boolean) {
           <!-- ══════════════════════════════════════════════════
                          3. SCHEDULE
                     ══════════════════════════════════════════════════ -->
-          <p class="text-sm font-medium">Schedule</p>
+          <p class="text-sm font-medium">{{ t('policySheet.schedule') }}</p>
 
           <!-- Preset buttons -->
           <div class="flex flex-wrap gap-1.5">
@@ -1142,7 +1141,7 @@ function onOpenChange(value: boolean) {
           </div>
 
           <Field>
-            <FieldLabel for="schedule">Cron Expression</FieldLabel>
+            <FieldLabel for="schedule">{{ t('policySheet.cronExpression') }}</FieldLabel>
             <Input id="schedule" v-model="scheduleValue" class="font-mono" placeholder="0 2 * * *"
               :class="scheduleError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
             <FieldError v-if="scheduleError">{{ scheduleError }}</FieldError>
@@ -1153,21 +1152,21 @@ function onOpenChange(value: boolean) {
           <!-- ══════════════════════════════════════════════════
                          4. DESTINATIONS
                     ══════════════════════════════════════════════════ -->
-          <p class="text-sm font-medium">Destinations</p>
+          <p class="text-sm font-medium">{{ t('policySheet.destinations') }}</p>
           <p class="text-muted-foreground text-xs -mt-3">
-            Select where to store backups. Use ↑↓ to set the priority order.
+            {{ t('policySheet.destinationsHelp') }}
           </p>
 
           <!-- Destination search -->
           <div class="relative">
             <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
-            <Input v-model="destSearch" class="pl-8 h-8 text-sm" placeholder="Search destinations…"
+            <Input v-model="destSearch" class="pl-8 h-8 text-sm" :placeholder="t('policySheet.searchDestinations')"
               autocomplete="off" data-bwignore data-1p-ignore data-lpignore="true" />
           </div>
 
           <div v-if="availableDestinations.length === 0 && !loadingData"
             class="rounded-md border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
-            {{ destSearch ? 'No destinations match your search.' : 'No destinations available. Create one first.' }}
+            {{ destSearch ? t('policySheet.noMatchingDestinations') : t('policySheet.noAvailableDestinations') }}
           </div>
 
           <div v-else class="flex flex-col gap-1">
@@ -1192,7 +1191,7 @@ function onOpenChange(value: boolean) {
                        a destination used by other policies shares one
                        retention configuration with them, informational only. -->
                   <p v-if="dest.policy_count > 0" class="text-xs text-muted-foreground mt-0.5">
-                    Already used by {{ dest.policy_count }} other polic{{ dest.policy_count === 1 ? 'y' : 'ies' }} — shares one retention configuration.
+                    {{ t('policySheet.alreadyUsedBy', dest.policy_count, { named: { n: dest.policy_count } }) }}
                   </p>
                 </div>
               </div>
@@ -1204,7 +1203,7 @@ function onOpenChange(value: boolean) {
 
           <!-- Priority order list — shown only when ≥1 destination is selected -->
           <div v-if="orderedDestIds && orderedDestIds.length > 0" class="flex flex-col gap-1">
-            <p class="text-xs font-medium text-muted-foreground">Priority Order</p>
+            <p class="text-xs font-medium text-muted-foreground">{{ t('policySheet.priorityOrder') }}</p>
             <div v-for="(id, idx) in orderedDestIds" :key="id"
               class="flex items-center gap-2 rounded-md bg-muted/50 px-3 py-1.5">
               <span class="text-xs font-mono text-muted-foreground w-5 shrink-0">{{ idx + 1 }}.</span>
@@ -1229,9 +1228,9 @@ function onOpenChange(value: boolean) {
                          5. REPOSITORY PASSWORD (create only)
                     ══════════════════════════════════════════════════ -->
           <template v-if="!isEdit">
-            <p class="text-sm font-medium">Repository Password</p>
+            <p class="text-sm font-medium">{{ t('policySheet.repositoryPassword') }}</p>
             <p class="text-muted-foreground text-xs -mt-3">
-              Required. Restic uses this to encrypt the repository. Store it safely — it cannot be recovered.
+              {{ t('policySheet.repositoryPasswordHelp') }}
             </p>
 
             <!-- Selected destination(s) already have a password on file (imported
@@ -1239,9 +1238,9 @@ function onOpenChange(value: boolean) {
                  asking the user to retype a secret the server already has. -->
             <div v-if="canUseDestinationPassword" class="flex items-center justify-between gap-4">
               <div>
-                <p class="text-sm font-medium">Use the destination's existing password</p>
+                <p class="text-sm font-medium">{{ t('policySheet.useExistingPassword') }}</p>
                 <p class="text-muted-foreground text-xs">
-                  The selected destination already has a repository password on file from when it was imported.
+                  {{ t('policySheet.useExistingPasswordHelp') }}
                 </p>
               </div>
               <Switch :model-value="useDestinationPasswordValue"
@@ -1250,10 +1249,10 @@ function onOpenChange(value: boolean) {
 
             <template v-if="!useDestinationPasswordValue">
             <Field>
-              <FieldLabel for="repo_password">Password <span class="text-destructive">*</span></FieldLabel>
+              <FieldLabel for="repo_password">{{ t('policySheet.password') }} <span class="text-destructive">*</span></FieldLabel>
               <div class="relative">
                 <Input id="repo_password" v-model="repoPassValue" :type="showPassword ? 'text' : 'password'"
-                  autocomplete="new-password" placeholder="min. 8 characters"
+                  autocomplete="new-password" :placeholder="t('policySheet.passwordPlaceholder')"
                   :class="['pr-10', repoPassError ? 'border-destructive focus-visible:ring-destructive/30' : '']" />
                 <button type="button"
                   class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
@@ -1266,10 +1265,10 @@ function onOpenChange(value: boolean) {
             </Field>
 
             <Field>
-              <FieldLabel for="repo_password_confirm">Confirm Password <span class="text-destructive">*</span>
+              <FieldLabel for="repo_password_confirm">{{ t('policySheet.confirmPassword') }} <span class="text-destructive">*</span>
               </FieldLabel>
               <Input id="repo_password_confirm" v-model="repoPassConfirmValue"
-                :type="showPassword ? 'text' : 'password'" autocomplete="new-password" placeholder="repeat password"
+                :type="showPassword ? 'text' : 'password'" autocomplete="new-password" :placeholder="t('policySheet.repeatPassword')"
                 :class="repoPassConfirmError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
               <FieldError v-if="repoPassConfirmError">{{ repoPassConfirmError }}</FieldError>
             </Field>
@@ -1305,8 +1304,8 @@ function onOpenChange(value: boolean) {
               <button type="button"
                 class="flex w-full items-center justify-between text-sm font-medium hover:text-foreground/80 transition-colors">
                 <span>
-                  Hooks
-                  <span class="text-muted-foreground font-normal">(optional)</span>
+                  {{ t('policySheet.hooks') }}
+                  <span class="text-muted-foreground font-normal">{{ t('policySheet.hooksOptional') }}</span>
                 </span>
                 <ChevronRight class="w-4 h-4 text-muted-foreground transition-transform duration-200"
                   :class="hooksOpen ? 'rotate-90' : ''" />
@@ -1320,14 +1319,14 @@ function onOpenChange(value: boolean) {
                 <Alert v-if="!authStore.isAdmin" variant="default" class="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30">
                   <AlertCircle class="h-4 w-4 text-amber-600 dark:text-amber-400" />
                   <AlertDescription class="text-amber-800 dark:text-amber-300 text-xs">
-                    Hook commands run with agent process privileges. Only admins can configure hooks.
+                    {{ t('policySheet.hookWarning') }}
                   </AlertDescription>
                 </Alert>
 
                 <!-- Pre-backup hook -->
                 <div class="rounded-md border p-3 flex flex-col gap-3">
                   <div class="flex items-center justify-between">
-                    <p class="text-sm font-medium">Pre-backup</p>
+                    <p class="text-sm font-medium">{{ t('policySheet.preBackup') }}</p>
                     <Switch :model-value="hookPreEnabled ?? false"
                       :disabled="!authStore.isAdmin"
                       @update:model-value="(v: boolean) => hookPreEnabled = v" />
@@ -1335,39 +1334,39 @@ function onOpenChange(value: boolean) {
                   <template v-if="hookPreEnabled">
                     <div class="grid grid-cols-2 gap-3">
                       <div class="flex flex-col gap-1.5">
-                        <Label for="hook-pre-name" class="text-sm">Name</Label>
-                        <Input id="hook-pre-name" v-model="hookPreName" placeholder="e.g. stop-container" :disabled="!authStore.isAdmin" />
+                        <Label for="hook-pre-name" class="text-sm">{{ t('policySheet.name') }}</Label>
+                        <Input id="hook-pre-name" v-model="hookPreName" :placeholder="t('policySheet.hookNameStop')" :disabled="!authStore.isAdmin" />
                       </div>
                       <div class="flex flex-col gap-1.5">
-                        <Label for="hook-pre-timeout" class="text-sm">Timeout (sec)</Label>
+                        <Label for="hook-pre-timeout" class="text-sm">{{ t('policySheet.timeout') }}</Label>
                         <Input id="hook-pre-timeout" v-model="hookPreTimeout" type="number" min="0"
                           :max="MAX_HOOK_TIMEOUT_SECS" :disabled="!authStore.isAdmin"
                           :class="hookPreTimeoutError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
-                        <p class="text-xs text-muted-foreground">0 uses the agent default (5 minutes).</p>
+                        <p class="text-xs text-muted-foreground">{{ t('policySheet.timeoutHelp') }}</p>
                         <FieldError v-if="hookPreTimeoutError">{{ hookPreTimeoutError }}</FieldError>
                       </div>
                     </div>
                     <div class="flex flex-col gap-1.5">
-                      <Label for="hook-pre-cmd" class="text-sm">Command</Label>
-                      <Input id="hook-pre-cmd" v-model="hookPreCommand" class="font-mono" placeholder="e.g. docker" :disabled="!authStore.isAdmin" />
+                      <Label for="hook-pre-cmd" class="text-sm">{{ t('policySheet.command') }}</Label>
+                      <Input id="hook-pre-cmd" v-model="hookPreCommand" class="font-mono" :placeholder="t('policySheet.hookCommandPlaceholder')" :disabled="!authStore.isAdmin" />
                     </div>
                     <div class="flex flex-col gap-1.5">
                       <div class="flex items-center justify-between">
-                        <Label class="text-sm">Arguments</Label>
+                        <Label class="text-sm">{{ t('policySheet.arguments') }}</Label>
                         <Button type="button" variant="outline" size="sm" :disabled="!authStore.isAdmin"
                           @click="addHookPreArg">
                           <Plus class="w-3 h-3" />
-                          Add
+                          {{ t('policySheet.add') }}
                         </Button>
                       </div>
                       <p v-if="!hookPreArgs || hookPreArgs.length === 0"
                         class="text-xs text-muted-foreground">
-                        No arguments.
+                        {{ t('policySheet.noArguments') }}
                       </p>
                       <div v-for="(arg, argIdx) in (hookPreArgs ?? [])" :key="argIdx"
                         class="flex items-center gap-2">
                         <Input :model-value="arg" class="font-mono flex-1"
-                          :placeholder="`arg ${argIdx + 1}`" :disabled="!authStore.isAdmin"
+                          :placeholder="t('policySheet.argPlaceholder', { n: argIdx + 1 })" :disabled="!authStore.isAdmin"
                           @update:model-value="updateHookPreArg(argIdx, String($event))" />
                         <Button type="button" variant="ghost" size="icon"
                           class="w-6 h-6 shrink-0 text-muted-foreground hover:text-destructive"
@@ -1382,7 +1381,7 @@ function onOpenChange(value: boolean) {
                 <!-- Post-backup hook -->
                 <div class="rounded-md border p-3 flex flex-col gap-3">
                   <div class="flex items-center justify-between">
-                    <p class="text-sm font-medium">Post-backup</p>
+                    <p class="text-sm font-medium">{{ t('policySheet.postBackup') }}</p>
                     <Switch :model-value="hookPostEnabled ?? false"
                       :disabled="!authStore.isAdmin"
                       @update:model-value="(v: boolean) => hookPostEnabled = v" />
@@ -1390,39 +1389,39 @@ function onOpenChange(value: boolean) {
                   <template v-if="hookPostEnabled">
                     <div class="grid grid-cols-2 gap-3">
                       <div class="flex flex-col gap-1.5">
-                        <Label for="hook-post-name" class="text-sm">Name</Label>
-                        <Input id="hook-post-name" v-model="hookPostName" placeholder="e.g. start-container" :disabled="!authStore.isAdmin" />
+                        <Label for="hook-post-name" class="text-sm">{{ t('policySheet.name') }}</Label>
+                        <Input id="hook-post-name" v-model="hookPostName" :placeholder="t('policySheet.hookNameStart')" :disabled="!authStore.isAdmin" />
                       </div>
                       <div class="flex flex-col gap-1.5">
-                        <Label for="hook-post-timeout" class="text-sm">Timeout (sec)</Label>
+                        <Label for="hook-post-timeout" class="text-sm">{{ t('policySheet.timeout') }}</Label>
                         <Input id="hook-post-timeout" v-model="hookPostTimeout" type="number" min="0"
                           :max="MAX_HOOK_TIMEOUT_SECS" :disabled="!authStore.isAdmin"
                           :class="hookPostTimeoutError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
-                        <p class="text-xs text-muted-foreground">0 uses the agent default (5 minutes).</p>
+                        <p class="text-xs text-muted-foreground">{{ t('policySheet.timeoutHelp') }}</p>
                         <FieldError v-if="hookPostTimeoutError">{{ hookPostTimeoutError }}</FieldError>
                       </div>
                     </div>
                     <div class="flex flex-col gap-1.5">
-                      <Label for="hook-post-cmd" class="text-sm">Command</Label>
-                      <Input id="hook-post-cmd" v-model="hookPostCommand" class="font-mono" placeholder="e.g. docker" :disabled="!authStore.isAdmin" />
+                      <Label for="hook-post-cmd" class="text-sm">{{ t('policySheet.command') }}</Label>
+                      <Input id="hook-post-cmd" v-model="hookPostCommand" class="font-mono" :placeholder="t('policySheet.hookCommandPlaceholder')" :disabled="!authStore.isAdmin" />
                     </div>
                     <div class="flex flex-col gap-1.5">
                       <div class="flex items-center justify-between">
-                        <Label class="text-sm">Arguments</Label>
+                        <Label class="text-sm">{{ t('policySheet.arguments') }}</Label>
                         <Button type="button" variant="outline" size="sm" :disabled="!authStore.isAdmin"
                           @click="addHookPostArg">
                           <Plus class="w-3 h-3" />
-                          Add
+                          {{ t('policySheet.add') }}
                         </Button>
                       </div>
                       <p v-if="!hookPostArgs || hookPostArgs.length === 0"
                         class="text-xs text-muted-foreground">
-                        No arguments.
+                        {{ t('policySheet.noArguments') }}
                       </p>
                       <div v-for="(arg, argIdx) in (hookPostArgs ?? [])" :key="argIdx"
                         class="flex items-center gap-2">
                         <Input :model-value="arg" class="font-mono flex-1"
-                          :placeholder="`arg ${argIdx + 1}`" :disabled="!authStore.isAdmin"
+                          :placeholder="t('policySheet.argPlaceholder', { n: argIdx + 1 })" :disabled="!authStore.isAdmin"
                           @update:model-value="updateHookPostArg(argIdx, String($event))" />
                         <Button type="button" variant="ghost" size="icon"
                           class="w-6 h-6 shrink-0 text-muted-foreground hover:text-destructive"
@@ -1442,11 +1441,9 @@ function onOpenChange(value: boolean) {
           <Separator />
           <div class="space-y-2">
             <div>
-              <p class="text-sm font-medium">Exclude Patterns</p>
+              <p class="text-sm font-medium">{{ t('policySheet.excludePatterns') }}</p>
               <p class="text-muted-foreground text-xs">
-                One pattern per line. Passed as <code class="font-mono">--exclude</code> to restic.
-                Supports glob syntax (e.g. <code class="font-mono">*.log</code>, <code class="font-mono">**/.cache</code>).
-                Lines starting with <code class="font-mono">#</code> are ignored.
+                {{ t('policySheet.excludeHelp') }}
               </p>
             </div>
             <textarea
@@ -1462,12 +1459,9 @@ function onOpenChange(value: boolean) {
           <Separator />
           <div class="flex items-center justify-between gap-4">
             <div>
-              <p class="text-sm font-medium">Resume interrupted backups</p>
+              <p class="text-sm font-medium">{{ t('policySheet.resumeInterrupted') }}</p>
               <p class="text-muted-foreground text-xs">
-                If the agent disconnects mid-backup — a laptop going to sleep or losing power —
-                run it again as soon as the agent reconnects, instead of waiting for the next
-                scheduled time. Restic keeps whatever was already uploaded, so the retry only
-                transfers what is missing.
+                {{ t('policySheet.resumeHelp') }}
               </p>
             </div>
             <Switch :model-value="resumeInterrupted ?? true"
@@ -1478,34 +1472,33 @@ function onOpenChange(value: boolean) {
           <Separator />
           <div class="space-y-3">
             <div>
-              <p class="text-sm font-medium">Notifications</p>
+              <p class="text-sm font-medium">{{ t('policySheet.notifications') }}</p>
               <p class="text-muted-foreground text-xs">
-                Overrides the email and webhook toggles in Settings → Notifications for this
-                policy's jobs.
+                {{ t('policySheet.notificationsHelp') }}
               </p>
             </div>
             <div class="flex items-center justify-between gap-4">
-              <p class="text-sm">On success</p>
+              <p class="text-sm">{{ t('policySheet.onSuccess') }}</p>
               <Select :model-value="notifyOnSuccess" @update:model-value="notifyOnSuccess = $event as NotifyOverride">
                 <SelectTrigger class="w-48">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem v-for="o in NOTIFY_OVERRIDE_OPTIONS" :key="o.value" :value="o.value">
-                    {{ o.label }}
+                    {{ t(o.labelKey) }}
                   </SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div class="flex items-center justify-between gap-4">
-              <p class="text-sm">On failure</p>
+              <p class="text-sm">{{ t('policySheet.onFailure') }}</p>
               <Select :model-value="notifyOnFailure" @update:model-value="notifyOnFailure = $event as NotifyOverride">
                 <SelectTrigger class="w-48">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem v-for="o in NOTIFY_OVERRIDE_OPTIONS" :key="o.value" :value="o.value">
-                    {{ o.label }}
+                    {{ t(o.labelKey) }}
                   </SelectItem>
                 </SelectContent>
               </Select>
@@ -1517,11 +1510,9 @@ function onOpenChange(value: boolean) {
           <!-- Healthchecks.io -->
           <Field>
             <div>
-              <p class="text-sm font-medium">Healthchecks.io</p>
+              <p class="text-sm font-medium">{{ t('policySheet.healthchecks') }}</p>
               <p class="text-muted-foreground text-xs">
-                Ping URL of a Healthchecks check. Each backup pings /start, the URL itself on success
-                and /fail on failure, with the job ID as run ID — so a backup that never runs raises
-                an alert too. Leave empty to disable.
+                {{ t('policySheet.healthchecksHelp') }}
               </p>
             </div>
             <div class="flex gap-2">
@@ -1533,16 +1524,16 @@ function onOpenChange(value: boolean) {
                 :disabled="!healthcheckURL?.trim() || !!healthcheckURLError || hcTestState === 'sending'"
                 @click="sendTestPing">
                 <Loader2 v-if="hcTestState === 'sending'" class="size-4 animate-spin" />
-                Send test ping
+                {{ t('policySheet.sendTestPing') }}
               </Button>
             </div>
             <FieldError v-if="healthcheckURLError">{{ healthcheckURLError }}</FieldError>
             <p v-else-if="hcTestState === 'ok'" class="text-xs text-green-600 dark:text-green-400">
-              Test ping delivered. It appears in the check's event log without changing its status.
+              {{ t('policySheet.testPingOk') }}
             </p>
             <FieldError v-else-if="hcTestState === 'error'">{{ hcTestError }}</FieldError>
             <p v-if="!authStore.isAdmin" class="text-muted-foreground text-xs">
-              Only administrators can change the ping URL.
+              {{ t('policySheet.onlyAdminsUrl') }}
             </p>
           </Field>
 
@@ -1551,9 +1542,9 @@ function onOpenChange(value: boolean) {
             <Separator />
             <div class="flex items-center justify-between">
               <div>
-                <p class="text-sm font-medium">Enabled</p>
+                <p class="text-sm font-medium">{{ t('policySheet.enabled') }}</p>
                 <p class="text-muted-foreground text-xs">
-                  Disabled policies are paused and won't run on schedule.
+                  {{ t('policySheet.enabledHelp') }}
                 </p>
               </div>
               <Switch :model-value="enabledValue ?? true" @update:model-value="enabledValue = $event" />
@@ -1562,11 +1553,11 @@ function onOpenChange(value: boolean) {
 
           <SheetFooter class="mt-2 px-0">
             <Button type="button" variant="outline" :disabled="submitting" @click="onOpenChange(false)">
-              Cancel
+              {{ t('policySheet.cancel') }}
             </Button>
             <Button type="submit" :disabled="submitting || loadingData">
               <Loader2 v-if="submitting" class="size-4 animate-spin" />
-              {{ submitting ? 'Saving…' : (isEdit ? 'Save Changes' : 'Create Policy') }}
+              {{ submitting ? t('policySheet.saving') : (isEdit ? t('policySheet.saveChanges') : t('policySheet.createPolicy')) }}
             </Button>
           </SheetFooter>
         </FieldGroup>

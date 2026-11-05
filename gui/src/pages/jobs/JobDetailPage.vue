@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import {
     Table,
     TableBody,
@@ -38,6 +39,7 @@ import { statusVariant, statusClass, statusLabel, statusIcon, formatDate, format
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const { t, locale } = useI18n()
 const jobId = route.params.id as string
 
 // ---------------------------------------------------------------------------
@@ -75,7 +77,7 @@ function logLevelVariant(level: string): 'default' | 'secondary' | 'destructive'
 
 // formatTime returns just the time portion of an ISO timestamp for log lines.
 function formatTime(iso: string): string {
-    return new Date(iso).toLocaleTimeString(undefined, { timeStyle: 'medium' })
+    return new Date(iso).toLocaleTimeString(locale.value, { timeStyle: 'medium' })
 }
 
 // isRunning is true while the job has not yet reached a terminal state.
@@ -113,7 +115,7 @@ async function fetchJob() {
         // truth; for running jobs we load historic DB logs and then append live ones.
         await fetchLogs()
     } catch (e: any) {
-        error.value = apiErrorMessage(e, 'Failed to load job.')
+        error.value = apiErrorMessage(e, t('jobDetail.loadFailed'))
     } finally {
         loading.value = false
     }
@@ -170,7 +172,7 @@ async function cancelJob() {
         await api(`/api/v1/jobs/${jobId}/cancel`, { method: 'POST' })
         // Optimistic UI: status will be updated via WebSocket event
     } catch (e: any) {
-        error.value = apiErrorMessage(e, 'Failed to cancel job.')
+        error.value = apiErrorMessage(e, t('jobDetail.cancelFailed'))
     } finally {
         cancelling.value = false
     }
@@ -241,12 +243,12 @@ onMounted(fetchJob)
         <!-- Page header -->
         <div class="flex items-center justify-between">
             <div class="flex items-center gap-3">
-                <Button variant="ghost" size="icon" aria-label="Back to jobs" @click="router.push('/jobs')">
+                <Button variant="ghost" size="icon" :aria-label="t('jobDetail.backToJobs')" @click="router.push('/jobs')">
                     <ArrowLeft class="w-4 h-4" />
                 </Button>
                 <div>
                     <div class="flex items-center gap-2">
-                        <h1 class="text-2xl font-semibold tracking-tight">Job Detail</h1>
+                        <h1 class="text-2xl font-semibold tracking-tight">{{ t('jobDetail.title') }}</h1>
                         <Badge v-if="job" :variant="statusVariant(job.status)" class="gap-1" :class="statusClass(job.status)">
                             <component :is="statusIcon(job.status)" class="w-3 h-3"
                                 :class="{ 'animate-spin': job.status === 'running' }" />
@@ -266,9 +268,9 @@ onMounted(fetchJob)
                     @click="cancelJob"
                 >
                     <XCircle class="w-3.5 h-3.5" />
-                    {{ cancelling ? 'Cancelling…' : 'Cancel Job' }}
+                    {{ cancelling ? t('jobDetail.cancelling') : t('jobDetail.cancelJob') }}
                 </Button>
-                <Button variant="outline" size="icon" aria-label="Refresh" :disabled="loading" @click="fetchJob">
+                <Button variant="outline" size="icon" :aria-label="t('common.refresh')" :disabled="loading" @click="fetchJob">
                     <RefreshCw class="w-4 h-4" :class="{ 'animate-spin': loading }" />
                 </Button>
             </div>
@@ -283,9 +285,7 @@ onMounted(fetchJob)
         <Alert v-if="job?.status === 'waiting'">
             <Hourglass class="w-4 h-4" />
             <AlertDescription>
-                Waiting for a destination: the repository is in use by a job this one cannot run alongside
-                (backups share a repository, retention sweeps and integrity checks need it alone). This job
-                starts automatically as soon as all its destinations are free.
+                {{ t('jobDetail.waitingBody') }}
             </AlertDescription>
         </Alert>
 
@@ -294,7 +294,7 @@ onMounted(fetchJob)
 
             <!-- Policy -->
             <div class="p-4 border rounded-md">
-                <p class="text-xs text-muted-foreground uppercase tracking-wide mb-1">Policy</p>
+                <p class="text-xs text-muted-foreground uppercase tracking-wide mb-1">{{ t('jobDetail.policy') }}</p>
                 <Skeleton v-if="loading" class="h-5 w-3/4" />
                 <div v-else class="flex items-center gap-2 text-sm font-medium">
                     <FileText class="w-4 h-4 text-muted-foreground shrink-0" />
@@ -304,7 +304,7 @@ onMounted(fetchJob)
 
             <!-- Agent -->
             <div class="p-4 border rounded-md">
-                <p class="text-xs text-muted-foreground uppercase tracking-wide mb-1">Agent</p>
+                <p class="text-xs text-muted-foreground uppercase tracking-wide mb-1">{{ t('jobDetail.agent') }}</p>
                 <Skeleton v-if="loading" class="h-5 w-3/4" />
                 <div v-else class="flex items-center gap-2 text-sm font-medium">
                     <Server class="w-4 h-4 text-muted-foreground shrink-0" />
@@ -314,7 +314,7 @@ onMounted(fetchJob)
 
             <!-- Duration -->
             <div class="p-4 border rounded-md">
-                <p class="text-xs text-muted-foreground uppercase tracking-wide mb-1">Duration</p>
+                <p class="text-xs text-muted-foreground uppercase tracking-wide mb-1">{{ t('jobDetail.duration') }}</p>
                 <Skeleton v-if="loading" class="h-5 w-1/2" />
                 <div v-else class="flex items-center gap-2 text-sm font-medium font-mono">
                     <CalendarClock class="w-4 h-4 text-muted-foreground shrink-0" />
@@ -326,8 +326,8 @@ onMounted(fetchJob)
 
         <!-- Started / Finished timestamps (full width, subtle) -->
         <div v-if="!loading && job" class="flex items-center gap-6 text-sm text-muted-foreground -mt-2">
-            <span>Started: <span class="text-foreground">{{ formatDate(job.started_at) }}</span></span>
-            <span>Finished: <span class="text-foreground">{{ formatDate(job.ended_at) }}</span></span>
+            <span>{{ t('jobDetail.started') }} <span class="text-foreground">{{ formatDate(job.started_at) }}</span></span>
+            <span>{{ t('jobDetail.finished') }} <span class="text-foreground">{{ formatDate(job.ended_at) }}</span></span>
         </div>
 
         <!-- Error message (only for failed jobs) -->
@@ -337,20 +337,20 @@ onMounted(fetchJob)
         </Alert>
         <Alert v-if="!loading && job?.status === 'cancelled'" class="border-slate-300 dark:border-slate-700">
             <Ban class="w-4 h-4" />
-            <AlertDescription>{{ job.error || 'Job was cancelled.' }}</AlertDescription>
+            <AlertDescription>{{ job.error || t('jobDetail.cancelledMessage') }}</AlertDescription>
         </Alert>
 
         <!-- ── Destinations ────────────────────────────────────────────────── -->
         <div v-if="job?.type !== 'restore'" class="flex flex-col gap-3">
-            <p class="text-sm font-medium">Destinations</p>
+            <p class="text-sm font-medium">{{ t('jobDetail.destinations') }}</p>
             <div class="border rounded-md overflow-x-auto">
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Destination</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Added</TableHead>
-                            <TableHead>Duration</TableHead>
+                            <TableHead>{{ t('jobDetail.colDestination') }}</TableHead>
+                            <TableHead>{{ t('jobDetail.colStatus') }}</TableHead>
+                            <TableHead>{{ t('jobDetail.colAdded') }}</TableHead>
+                            <TableHead>{{ t('jobDetail.colDuration') }}</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -373,9 +373,9 @@ onMounted(fetchJob)
                                             <HardDrive class="w-10 h-10 text-muted-foreground" />
                                         </div>
                                         <div>
-                                            <p class="font-medium">No destination data</p>
+                                            <p class="font-medium">{{ t('jobDetail.noDestinationData') }}</p>
                                             <p class="mt-1 text-sm text-muted-foreground">
-                                                Destination details will appear once the job runs.
+                                                {{ t('jobDetail.noDestinationDataDetail') }}
                                             </p>
                                         </div>
                                     </div>
@@ -414,16 +414,16 @@ onMounted(fetchJob)
         <!-- Only shown when the policy actually has command-type sources — most
              jobs have none, so unlike Destinations there is no empty state. -->
         <div v-if="job?.command_sources?.length" class="flex flex-col gap-3">
-            <p class="text-sm font-medium">Command Sources</p>
+            <p class="text-sm font-medium">{{ t('jobDetail.commandSources') }}</p>
             <div class="border rounded-md overflow-x-auto">
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Destination</TableHead>
-                            <TableHead>Source</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Added</TableHead>
-                            <TableHead>Duration</TableHead>
+                            <TableHead>{{ t('jobDetail.colDestination') }}</TableHead>
+                            <TableHead>{{ t('jobDetail.colSource') }}</TableHead>
+                            <TableHead>{{ t('jobDetail.colStatus') }}</TableHead>
+                            <TableHead>{{ t('jobDetail.colAdded') }}</TableHead>
+                            <TableHead>{{ t('jobDetail.colDuration') }}</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -453,14 +453,14 @@ onMounted(fetchJob)
              attached to this job's destination, plus one per that policy's
              command sources. -->
         <div v-if="job?.retention_tags?.length" class="flex flex-col gap-3">
-            <p class="text-sm font-medium">Retention Tags</p>
+            <p class="text-sm font-medium">{{ t('jobDetail.retentionTags') }}</p>
             <div class="border rounded-md overflow-x-auto">
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Tag</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Duration</TableHead>
+                            <TableHead>{{ t('jobDetail.colTag') }}</TableHead>
+                            <TableHead>{{ t('jobDetail.colStatus') }}</TableHead>
+                            <TableHead>{{ t('jobDetail.colDuration') }}</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -483,13 +483,13 @@ onMounted(fetchJob)
         <!-- ── Progress (shown during execution) ─────────────────────────── -->
         <div v-if="!loading && isRunning" class="flex flex-col gap-3">
             <div class="flex items-center justify-between">
-                <p class="text-sm font-medium">Progress</p>
+                <p class="text-sm font-medium">{{ t('jobDetail.progress') }}</p>
                 <div class="flex items-center gap-1.5 text-xs text-muted-foreground">
                     <span class="relative flex h-2 w-2">
                         <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
                         <span class="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
                     </span>
-                    Live
+                    {{ t('jobDetail.live') }}
                 </div>
             </div>
             <template v-if="progressData">
@@ -497,17 +497,17 @@ onMounted(fetchJob)
                     <span class="font-medium tabular-nums">{{ Math.round(progressData.percent_done * 100) }}%</span>
                     <span class="text-muted-foreground text-xs tabular-nums">
                         {{ formatBytes(progressData.bytes_done) }} / {{ formatBytes(progressData.total_bytes) }}
-                        &mdash; {{ progressData.files_done }} / {{ progressData.total_files }} files
+                        &mdash; {{ t('jobDetail.filesCount', { done: progressData.files_done, total: progressData.total_files }) }}
                     </span>
                 </div>
                 <Progress :model-value="progressData.percent_done * 100" />
             </template>
-            <p v-else class="text-sm text-muted-foreground">Preparing...</p>
+            <p v-else class="text-sm text-muted-foreground">{{ t('jobDetail.preparing') }}</p>
         </div>
 
         <!-- ── Logs ───────────────────────────────────────────────────────── -->
         <div class="flex flex-col gap-3">
-            <p class="text-sm font-medium">Logs</p>
+            <p class="text-sm font-medium">{{ t('jobDetail.logs') }}</p>
 
             <!-- Loading skeleton -->
             <template v-if="loading">
@@ -519,7 +519,7 @@ onMounted(fetchJob)
             <!-- Placeholder while job is running -->
             <div v-else-if="isRunning"
                 class="border rounded-md p-8 text-center text-sm text-muted-foreground">
-                Logs will be available after job completion.
+                {{ t('jobDetail.logsPending') }}
             </div>
 
             <!-- Log list after completion -->
@@ -542,7 +542,7 @@ onMounted(fetchJob)
                     </div>
                 </div>
                 <div v-else class="border rounded-md p-8 text-center text-sm text-muted-foreground">
-                    No log entries recorded for this job.
+                    {{ t('jobDetail.noLogs') }}
                 </div>
             </template>
         </div>

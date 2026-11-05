@@ -8,8 +8,9 @@
 // calls setup.markCompleted() so the guard does not re-fetch the status,
 // and redirects to /login.
 
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useForm, useField } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
 import { z } from 'zod'
@@ -29,19 +30,25 @@ import {
 import { Input } from '@/components/ui/input'
 import { AlertCircle, Eye, EyeOff, Loader2, Moon, Sun } from '@lucide/vue'
 import { useTheme } from '@/composables/useTheme'
+import LocaleToggle from '@/components/shared/LocaleToggle.vue'
+
+const { t } = useI18n()
 
 // ─── Validation schema ────────────────────────────────────────────────────────
 
-const schema = toTypedSchema(
-    z.object({
-        name: z.string().min(1, 'Name is required'),
-        email: z.email('Enter a valid email address'),
-        password: passwordSchema,
-        confirmPassword: z.string().min(1, 'Please confirm your password'),
-    }).refine((data) => data.password === data.confirmPassword, {
-        message: 'Passwords do not match',
-        path: ['confirmPassword'],
-    }),
+// Rebuilt when the locale changes so validation messages follow the UI.
+const schema = computed(() =>
+    toTypedSchema(
+        z.object({
+            name: z.string().min(1, t('validation.nameRequired')),
+            email: z.email(t('validation.emailInvalid')),
+            password: passwordSchema(),
+            confirmPassword: z.string().min(1, t('validation.confirmPasswordRequired')),
+        }).refine((data) => data.password === data.confirmPassword, {
+            message: t('validation.passwordsDoNotMatch'),
+            path: ['confirmPassword'],
+        }),
+    ),
 )
 
 // Fields start empty rather than undefined, so an untouched field fails with
@@ -88,7 +95,7 @@ const onSubmit = handleSubmit(async (values) => {
     } catch (e: unknown) {
         // The server explains refusals it can attribute (e.g. the setup
         // window expired and the server must be restarted).
-        serverError.value = apiErrorMessage(e, 'Setup failed. Please try again.')
+        serverError.value = apiErrorMessage(e, t('auth.setup.failed'))
     }
 })
 </script>
@@ -106,13 +113,16 @@ const onSubmit = handleSubmit(async (values) => {
             maskImage: 'radial-gradient(ellipse 60% 60% at 50% 50%, #000 30%, transparent 70%)',
         }" />
 
-        <!-- Theme toggle -->
-        <Button variant="ghost" size="icon"
-            class="absolute z-10 top-4 right-4 text-muted-foreground hover:text-foreground" :aria-label="modeLabel"
-            @click="cycle()">
-            <Sun v-if="isDark" class="size-4" />
-            <Moon v-else class="size-4" />
-        </Button>
+        <!-- Theme and language toggles -->
+        <div class="absolute z-10 top-4 right-4 flex items-center gap-2">
+            <LocaleToggle />
+            <Button variant="ghost" size="icon"
+                class="text-muted-foreground hover:text-foreground" :aria-label="modeLabel"
+                @click="cycle()">
+                <Sun v-if="isDark" class="size-4" />
+                <Moon v-else class="size-4" />
+            </Button>
+        </div>
 
         <div class="relative z-10 w-full max-w-sm md:max-w-4xl">
             <div class="flex flex-col gap-6">
@@ -124,9 +134,9 @@ const onSubmit = handleSubmit(async (values) => {
                             <FieldGroup>
                                 <!-- Title -->
                                 <div class="flex flex-col items-center gap-2 text-center">
-                                    <h1 class="text-2xl font-bold">Welcome to Arkeep</h1>
+                                    <h1 class="text-2xl font-bold">{{ t('auth.setup.title') }}</h1>
                                     <p class="text-sm text-muted-foreground text-balance">
-                                        Create your admin account to get started
+                                        {{ t('auth.setup.subtitle') }}
                                     </p>
                                 </div>
 
@@ -143,8 +153,8 @@ const onSubmit = handleSubmit(async (values) => {
 
                                 <!-- Name -->
                                 <Field>
-                                    <FieldLabel for="name">Name</FieldLabel>
-                                    <Input id="name" v-model="nameValue" type="text" placeholder="Jane Smith"
+                                    <FieldLabel for="name">{{ t('auth.setup.name') }}</FieldLabel>
+                                    <Input id="name" v-model="nameValue" type="text" :placeholder="t('auth.namePlaceholder')"
                                         autocomplete="new-password" autofocus spellcheck="false"
                                         :class="nameError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                                     <FieldError v-if="nameError">{{ nameError }}</FieldError>
@@ -152,8 +162,8 @@ const onSubmit = handleSubmit(async (values) => {
 
                                 <!-- Email -->
                                 <Field>
-                                    <FieldLabel for="email">Email</FieldLabel>
-                                    <Input id="email" v-model="emailValue" type="email" placeholder="m@example.com"
+                                    <FieldLabel for="email">{{ t('auth.setup.email') }}</FieldLabel>
+                                    <Input id="email" v-model="emailValue" type="email" :placeholder="t('auth.emailPlaceholder')"
                                         autocomplete="new-password" spellcheck="false"
                                         :class="emailError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                                     <FieldError v-if="emailError">{{ emailError }}</FieldError>
@@ -161,7 +171,7 @@ const onSubmit = handleSubmit(async (values) => {
 
                                 <!-- Password -->
                                 <Field>
-                                    <FieldLabel for="password">Password</FieldLabel>
+                                    <FieldLabel for="password">{{ t('auth.setup.password') }}</FieldLabel>
                                     <div class="relative">
                                         <Input id="password" v-model="passwordValue"
                                             :type="showPassword ? 'text' : 'password'" placeholder="••••••••"
@@ -169,7 +179,7 @@ const onSubmit = handleSubmit(async (values) => {
                                             :class="passwordError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                                         <button type="button"
                                             class="absolute transition-colors -translate-y-1/2 right-3 top-1/2 text-muted-foreground hover:text-foreground"
-                                            :aria-label="showPassword ? 'Hide password' : 'Show password'"
+                                            :aria-label="showPassword ? t('auth.hidePassword') : t('auth.showPassword')"
                                             @click="showPassword = !showPassword">
                                             <EyeOff v-if="showPassword" class="size-4" />
                                             <Eye v-else class="size-4" />
@@ -180,7 +190,7 @@ const onSubmit = handleSubmit(async (values) => {
 
                                 <!-- Confirm password -->
                                 <Field>
-                                    <FieldLabel for="confirmPassword">Confirm password</FieldLabel>
+                                    <FieldLabel for="confirmPassword">{{ t('auth.setup.confirmPassword') }}</FieldLabel>
                                     <div class="relative">
                                         <Input id="confirmPassword" v-model="confirmPasswordValue"
                                             :type="showConfirmPassword ? 'text' : 'password'" placeholder="••••••••"
@@ -188,7 +198,7 @@ const onSubmit = handleSubmit(async (values) => {
                                             :class="confirmPasswordError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                                         <button type="button"
                                             class="absolute transition-colors -translate-y-1/2 right-3 top-1/2 text-muted-foreground hover:text-foreground"
-                                            :aria-label="showConfirmPassword ? 'Hide password' : 'Show password'"
+                                            :aria-label="showConfirmPassword ? t('auth.hidePassword') : t('auth.showPassword')"
                                             @click="showConfirmPassword = !showConfirmPassword">
                                             <EyeOff v-if="showConfirmPassword" class="size-4" />
                                             <Eye v-else class="size-4" />
@@ -201,7 +211,7 @@ const onSubmit = handleSubmit(async (values) => {
                                 <Field>
                                     <Button type="submit" class="w-full" :disabled="isSubmitting">
                                         <Loader2 v-if="isSubmitting" class="size-4 animate-spin" />
-                                        {{ isSubmitting ? 'Creating account…' : 'Create account' }}
+                                        {{ isSubmitting ? t('auth.setup.creatingAccount') : t('auth.setup.createAccount') }}
                                     </Button>
                                 </Field>
                             </FieldGroup>
@@ -221,6 +231,6 @@ const onSubmit = handleSubmit(async (values) => {
 
     <!-- Footer -->
     <p class="fixed bottom-0 left-0 right-0 text-center text-xs text-muted-foreground pb-6">
-        Arkeep — open source backup management
+        {{ t('auth.footer') }}
     </p>
 </template>
