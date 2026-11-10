@@ -12,7 +12,7 @@
 
 services:
   server:
-    image: ghcr.io/arkeep-io/arkeep-server:v0.9.1
+    image: ghcr.io/arkeep-io/arkeep-server:v0.10.0
     container_name: arkeep-server
     restart: unless-stopped
     depends_on:
@@ -60,7 +60,7 @@ services:
       start_period: 10s
 
   agent:
-    image: ghcr.io/arkeep-io/arkeep-agent:v0.9.1
+    image: ghcr.io/arkeep-io/arkeep-agent:v0.10.0
     container_name: arkeep-agent
     restart: unless-stopped
     depends_on:
@@ -96,6 +96,7 @@ services:
       # mount mode, the socket gives full control of Docker: :ro only makes the socket
       # file read-only, not the API calls made through it. Remove this line if the agent
       # needs neither, or put a Docker socket proxy in front of it to restrict the API.
+      # Without it, in-place restores skip all Docker volumes and can't protect bind mounts of running containers.
       - /var/run/docker.sock:/var/run/docker.sock:ro
       # Docker volumes root — required to back up Docker named volumes.
       # :ro (default) — safe for backup; prevents accidental writes.
