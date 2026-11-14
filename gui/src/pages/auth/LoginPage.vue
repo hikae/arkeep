@@ -11,6 +11,7 @@
 
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useForm, useField } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
 import { z } from 'zod'
@@ -30,18 +31,24 @@ import { AlertCircle, Eye, EyeOff, Loader2, Moon, Sun } from '@lucide/vue'
 import { useTheme } from '@/composables/useTheme'
 import TwoFactorCodeForm from '@/components/users/TwoFactorCodeForm.vue'
 import PasswordChangeForm from '@/components/users/PasswordChangeForm.vue'
+import LocaleToggle from '@/components/shared/LocaleToggle.vue'
 import type { OIDCProviderSummary } from '@/types'
+
+const { t } = useI18n()
 
 // Respect the user's OS "reduce motion" preference for the decorative login video.
 const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
 // ─── Validation schema ────────────────────────────────────────────────────────
 
-const schema = toTypedSchema(
-    z.object({
-        email: z.email('Enter a valid email address'),
-        password: z.string('Password is required').min(1, 'Password is required'),
-    }),
+// Rebuilt when the locale changes so validation messages follow the UI.
+const schema = computed(() =>
+    toTypedSchema(
+        z.object({
+            email: z.email(t('validation.emailInvalid')),
+            password: z.string(t('validation.passwordRequired')).min(1, t('validation.passwordRequired')),
+        }),
+    ),
 )
 
 const { handleSubmit, isSubmitting } = useForm({
@@ -92,7 +99,7 @@ const onSubmit = handleSubmit(async (values) => {
         }
         router.push(redirectTo.value)
     } catch {
-        serverError.value = 'Invalid email or password'
+        serverError.value = t('auth.login.invalidCredentials')
     }
 })
 
@@ -156,13 +163,16 @@ onMounted(() => {
             WebkitMaskImage: 'radial-gradient(ellipse 60% 60% at 50% 50%, #000 30%, transparent 70%)',
             maskImage: 'radial-gradient(ellipse 60% 60% at 50% 50%, #000 30%, transparent 70%)',
         }" />
-        <!-- Theme toggle -->
-        <Button variant="ghost" size="icon"
-            class="absolute z-10 top-4 right-4 text-muted-foreground hover:text-foreground" :aria-label="modeLabel"
-            @click="cycle()">
-            <Sun v-if="isDark" class="size-4" />
-            <Moon v-else class="size-4" />
-        </Button>
+        <!-- Theme and language toggles -->
+        <div class="absolute z-10 top-4 right-4 flex items-center gap-2">
+            <LocaleToggle />
+            <Button variant="ghost" size="icon"
+                class="text-muted-foreground hover:text-foreground" :aria-label="modeLabel"
+                @click="cycle()">
+                <Sun v-if="isDark" class="size-4" />
+                <Moon v-else class="size-4" />
+            </Button>
+        </div>
         <div class="relative z-10 w-full max-w-sm md:max-w-4xl">
             <div class="flex flex-col gap-6">
                 <Card class="p-0 overflow-hidden">
@@ -172,9 +182,9 @@ onMounted(() => {
                             <FieldGroup>
                                 <!-- Title -->
                                 <div class="flex flex-col items-center gap-2 text-center">
-                                    <h1 class="text-2xl font-bold">Welcome back</h1>
+                                    <h1 class="text-2xl font-bold">{{ t('auth.login.title') }}</h1>
                                     <p class="text-sm text-muted-foreground text-balance">
-                                        Login to your Arkeep account
+                                        {{ t('auth.login.subtitle') }}
                                     </p>
                                 </div>
                                 <!-- Server error -->
@@ -190,8 +200,8 @@ onMounted(() => {
 
                                 <!-- Email -->
                                 <Field>
-                                    <FieldLabel for="email">Email</FieldLabel>
-                                    <Input id="email" v-model="emailValue" type="email" placeholder="m@example.com"
+                                    <FieldLabel for="email">{{ t('common.email') }}</FieldLabel>
+                                    <Input id="email" v-model="emailValue" type="email" :placeholder="t('auth.emailPlaceholder')"
                                         autocomplete="email" autofocus spellcheck="false"
                                         :class="emailError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                                     <FieldError v-if="emailError">{{ emailError }}</FieldError>
@@ -200,10 +210,10 @@ onMounted(() => {
                                 <!-- Password -->
                                 <Field>
                                     <div class="flex items-center">
-                                        <FieldLabel for="password">Password</FieldLabel>
+                                        <FieldLabel for="password">{{ t('common.password') }}</FieldLabel>
                                         <RouterLink to="/auth/forgot-password"
                                             class="ml-auto text-xs text-muted-foreground hover:text-foreground hover:underline">
-                                            Forgot password?
+                                            {{ t('auth.login.forgotPassword') }}
                                         </RouterLink>
                                     </div>
                                     <div class="relative">
@@ -213,7 +223,7 @@ onMounted(() => {
                                             :class="passwordError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                                         <button type="button"
                                             class="absolute transition-colors -translate-y-1/2 right-3 top-1/2 text-muted-foreground hover:text-foreground"
-                                            :aria-label="showPassword ? 'Hide password' : 'Show password'"
+                                            :aria-label="showPassword ? t('auth.hidePassword') : t('auth.showPassword')"
                                             @click="showPassword = !showPassword">
                                             <EyeOff v-if="showPassword" class="size-4" />
                                             <Eye v-else class="size-4" />
@@ -226,14 +236,14 @@ onMounted(() => {
                                 <Field>
                                     <Button type="submit" class="w-full" :disabled="isSubmitting">
                                         <Loader2 v-if="isSubmitting" class="size-4 animate-spin" />
-                                        {{ isSubmitting ? 'Signing in…' : 'Sign in' }}
+                                        {{ isSubmitting ? t('auth.login.signingIn') : t('auth.login.signIn') }}
                                     </Button>
                                 </Field>
 
                                 <!-- SSO buttons — rendered only when at least one provider is enabled -->
                                 <template v-if="oidcProviders.length > 0">
                                     <FieldSeparator class="*:data-[slot=field-separator-content]:bg-card">
-                                        Or continue with
+                                        {{ t('auth.login.orContinueWith') }}
                                     </FieldSeparator>
 
                                     <Field v-for="provider in oidcProviders" :key="provider.id">
@@ -242,7 +252,7 @@ onMounted(() => {
                                             @click="loginWithOIDC(provider.id)">
                                             <Loader2 v-if="oidcLoadingId === provider.id"
                                                 class="size-4 animate-spin" />
-                                            Login with {{ provider.name }}
+                                            {{ t('auth.login.loginWith', { name: provider.name }) }}
                                         </Button>
                                     </Field>
                                 </template>
@@ -272,7 +282,7 @@ onMounted(() => {
 
     <!-- Footer -->
     <p class="fixed bottom-0 left-0 right-0 text-center text-xs text-muted-foreground pb-6">
-        Arkeep — open source backup management
+        {{ t('auth.footer') }}
     </p>
 
 </template>

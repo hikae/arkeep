@@ -8,6 +8,7 @@
 // enforces the same rule (409).
 import { ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import {
     AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
     AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -31,6 +32,8 @@ const emit = defineEmits<{
     deleted: []
 }>()
 
+const { t } = useI18n()
+
 const usage = ref<AgentUsage | null>(null)
 const loading = ref(false)
 const deleting = ref(false)
@@ -46,7 +49,7 @@ async function loadUsage(id: string): Promise<void> {
         const res = await api<ApiResponse<AgentUsage>>(`/api/v1/agents/${id}/usage`)
         usage.value = res.data
     } catch (e) {
-        error.value = apiErrorMessage(e, 'Failed to check what uses this agent.')
+        error.value = apiErrorMessage(e, t('agentDelete.checkFailed'))
     } finally {
         loading.value = false
     }
@@ -67,7 +70,7 @@ async function confirmDelete(): Promise<void> {
     } catch (e) {
         // Something may have started using the agent meanwhile: reload the
         // list, then show why the deletion was refused.
-        const message = apiErrorMessage(e, 'Failed to delete agent.')
+        const message = apiErrorMessage(e, t('agentDelete.deleteFailed'))
         await loadUsage(props.agent.id)
         error.value = message
     } finally {
@@ -80,15 +83,13 @@ async function confirmDelete(): Promise<void> {
     <AlertDialog :open="props.open" @update:open="emit('update:open', $event)">
         <AlertDialogContent>
             <AlertDialogHeader>
-                <AlertDialogTitle>Delete agent?</AlertDialogTitle>
+                <AlertDialogTitle>{{ t('agentDelete.title') }}</AlertDialogTitle>
                 <AlertDialogDescription>
                     <span v-if="props.agent && !inUse()">
-                        <strong>{{ props.agent.name }}</strong> will be deleted. Existing jobs and snapshots
-                        are kept.
+                        {{ t('agentDelete.willDelete', { name: props.agent.name }) }}
                     </span>
                     <span v-else-if="props.agent">
-                        <strong>{{ props.agent.name }}</strong> is still in use and cannot be deleted. Move
-                        these to another agent, or delete them, first.
+                        {{ t('agentDelete.inUse', { name: props.agent.name }) }}
                     </span>
                 </AlertDialogDescription>
             </AlertDialogHeader>
@@ -99,12 +100,12 @@ async function confirmDelete(): Promise<void> {
 
             <div v-if="loading" class="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 class="size-4 animate-spin" />
-                Checking what uses this agent…
+                {{ t('agentDelete.checking') }}
             </div>
 
             <div v-else-if="usage && inUse()" class="flex flex-col gap-3 text-sm" data-testid="agent-usage">
                 <div v-if="usage.policies.length > 0">
-                    <p class="font-medium">Policies that back up on this agent</p>
+                    <p class="font-medium">{{ t('agentDelete.policiesUsing') }}</p>
                     <ul class="mt-1 list-disc pl-5">
                         <li v-for="p in usage.policies" :key="p.id">
                             <RouterLink :to="`/policies/${p.id}`" class="hover:underline">{{ p.name }}</RouterLink>
@@ -112,7 +113,7 @@ async function confirmDelete(): Promise<void> {
                     </ul>
                 </div>
                 <div v-if="usage.destinations.length > 0">
-                    <p class="font-medium">Destinations that use it as maintenance agent</p>
+                    <p class="font-medium">{{ t('agentDelete.destinationsUsing') }}</p>
                     <ul class="mt-1 list-disc pl-5">
                         <li v-for="d in usage.destinations" :key="d.id">
                             <RouterLink :to="`/destinations/${d.id}`" class="hover:underline">{{ d.name }}</RouterLink>
@@ -122,10 +123,10 @@ async function confirmDelete(): Promise<void> {
             </div>
 
             <AlertDialogFooter>
-                <AlertDialogCancel :disabled="deleting">Cancel</AlertDialogCancel>
+                <AlertDialogCancel :disabled="deleting">{{ t('common.cancel') }}</AlertDialogCancel>
                 <Button variant="destructive" :disabled="loading || deleting || !usage || inUse()"
                     @click="confirmDelete">
-                    {{ deleting ? 'Deleting…' : 'Delete' }}
+                    {{ deleting ? t('agentDelete.deleting') : t('common.delete') }}
                 </Button>
             </AlertDialogFooter>
         </AlertDialogContent>

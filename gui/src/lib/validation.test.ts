@@ -12,7 +12,7 @@ describe('passwordSchema', () => {
     ['too short', 'a'.repeat(MIN_PASSWORD_LENGTH - 1), 'Password must be at least 8 characters'],
     ['minimum length', 'a'.repeat(MIN_PASSWORD_LENGTH), undefined],
   ])('%s', (_, value, want) => {
-    expect(firstMessage(passwordSchema.safeParse(value))).toBe(want)
+    expect(firstMessage(passwordSchema().safeParse(value))).toBe(want)
   })
 })
 

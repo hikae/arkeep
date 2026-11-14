@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useForm, useField } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
 import { z } from 'zod'
@@ -28,6 +29,7 @@ const pruneMessage = ref<string | null>(null)
 // Mirrors maxRetentionDays on the server (10 years). An empty field is an
 // error rather than 0, which keeps the lines forever.
 const retentionDays = integerInRange(0, 3650)
+const { t, locale } = useI18n()
 
 const { handleSubmit, resetForm, isSubmitting } = useForm({
     validationSchema: toTypedSchema(z.object({
@@ -75,7 +77,7 @@ const submit = handleSubmit(async (values) => {
         success.value = true
         setTimeout(() => { success.value = false }, 3000)
     } catch (e: any) {
-        submitError.value = apiErrorMessage(e, 'Failed to save log retention settings')
+        submitError.value = apiErrorMessage(e, t('settingsLogRetention.saveFailed'))
     }
 })
 
@@ -92,10 +94,12 @@ async function pruneNow() {
         const res = await api<ApiResponse<{ deleted: number }>>('/api/v1/settings/logs/prune', {
             method: 'POST',
         })
-        pruneMessage.value = `Cleanup complete — ${res.data.deleted.toLocaleString()} log line(s) removed.`
+        pruneMessage.value = t('settingsLogRetention.pruneDone', {
+            count: res.data.deleted.toLocaleString(locale.value),
+        })
         setTimeout(() => { pruneMessage.value = null }, 6000)
     } catch (e: any) {
-        submitError.value = apiErrorMessage(e, 'Failed to run cleanup')
+        submitError.value = apiErrorMessage(e, t('settingsLogRetention.cleanupFailed'))
     } finally {
         pruning.value = false
     }
@@ -106,14 +110,12 @@ async function pruneNow() {
     <!-- Section header -->
     <div class="flex items-start justify-between gap-4 mb-6">
         <div>
-            <h2 class="text-base font-semibold">Log Retention</h2>
+            <h2 class="text-base font-semibold">{{ t('settingsLogRetention.title') }}</h2>
             <p class="mt-1 text-sm text-muted-foreground">
-                Automatically prune old job log lines so the database does not grow without bound.
-                Only the verbose log lines are removed — jobs and their outcomes are always kept.
-                Set a value to <strong>0</strong> to keep those lines forever (disabled).
+                {{ t('settingsLogRetention.description') }}
             </p>
         </div>
-        <Button variant="outline" size="icon" aria-label="Refresh" :disabled="loading" @click="fetchSettings">
+        <Button variant="outline" size="icon" :aria-label="t('common.refresh')" :disabled="loading" @click="fetchSettings">
             <RefreshCw class="size-4" :class="{ 'animate-spin': loading }" />
         </Button>
     </div>
@@ -143,7 +145,7 @@ async function pruneNow() {
                 leave-active-class="transition-all duration-150" leave-to-class="-translate-y-1 opacity-0">
                 <Alert v-if="success"
                     class="border-emerald-500/30 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400">
-                    <AlertDescription>Log retention settings saved.</AlertDescription>
+                    <AlertDescription>{{ t('settingsLogRetention.saved') }}</AlertDescription>
                 </Alert>
             </Transition>
 
@@ -158,10 +160,9 @@ async function pruneNow() {
             <!-- ── Retention windows ────────────────────────────────────────── -->
             <div class="flex flex-col gap-4">
                 <div class="flex flex-col gap-2 rounded-lg border px-4 py-3">
-                    <Label for="info_days" class="text-sm font-medium">Info logs — keep for (days)</Label>
+                    <Label for="info_days" class="text-sm font-medium">{{ t('settingsLogRetention.infoLabel') }}</Label>
                     <p class="text-xs text-muted-foreground">
-                        Deletes <code>info</code> log lines older than this many days. These are the bulk
-                        of the logs. 0 keeps them forever.
+                        {{ t('settingsLogRetention.infoHelp') }}
                     </p>
                     <Input id="info_days" v-model="infoDays" type="number" min="0" :max="3650"
                         class="max-w-40" :class="infoDaysError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
@@ -169,10 +170,9 @@ async function pruneNow() {
                 </div>
 
                 <div class="flex flex-col gap-2 rounded-lg border px-4 py-3">
-                    <Label for="warn_error_days" class="text-sm font-medium">Warning &amp; error logs — keep for (days)</Label>
+                    <Label for="warn_error_days" class="text-sm font-medium">{{ t('settingsLogRetention.warnLabel') }}</Label>
                     <p class="text-xs text-muted-foreground">
-                        Deletes <code>warn</code> and <code>error</code> log lines older than this many days.
-                        Leave at 0 to keep them forever (recommended — they are few and the most useful).
+                        {{ t('settingsLogRetention.warnHelp') }}
                     </p>
                     <Input id="warn_error_days" v-model="warnErrorDays" type="number" min="0" :max="3650"
                         class="max-w-40" :class="warnErrorDaysError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
@@ -184,7 +184,7 @@ async function pruneNow() {
             <div class="flex justify-end pt-2">
                 <Button type="submit" :disabled="isSubmitting">
                     <Loader2 v-if="isSubmitting" class="size-4 animate-spin" />
-                    {{ isSubmitting ? 'Saving…' : 'Save Settings' }}
+                    {{ isSubmitting ? t('settingsLogRetention.saving') : t('settingsLogRetention.saveSettings') }}
                 </Button>
             </div>
 
@@ -193,16 +193,15 @@ async function pruneNow() {
             <!-- ── Manual cleanup ──────────────────────────────────────────── -->
             <div class="flex items-center justify-between rounded-lg border px-4 py-3">
                 <div>
-                    <p class="text-sm font-medium">Run cleanup now</p>
+                    <p class="text-sm font-medium">{{ t('settingsLogRetention.cleanupNow') }}</p>
                     <p class="text-xs text-muted-foreground">
-                        Immediately prune old logs using the saved retention windows, then reclaim disk space.
-                        Useful if the database is already large. Save your settings first.
+                        {{ t('settingsLogRetention.cleanupHelp') }}
                     </p>
                 </div>
                 <Button type="button" variant="outline" :disabled="pruning" @click="pruneNow">
                     <Loader2 v-if="pruning" class="size-4 animate-spin" />
                     <Trash2 v-else class="size-4" />
-                    {{ pruning ? 'Cleaning…' : 'Run cleanup' }}
+                    {{ pruning ? t('settingsLogRetention.cleaning') : t('settingsLogRetention.runCleanup') }}
                 </Button>
             </div>
 

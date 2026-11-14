@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useForm, useField } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
 import { z } from 'zod'
@@ -19,6 +20,7 @@ import type { ApiResponse, SnapshotSyncSettings } from '@/types'
 // ---------------------------------------------------------------------------
 
 const loading = ref(false)
+const { t } = useI18n()
 const submitError = ref<string | null>(null)
 const success = ref(false)
 
@@ -65,7 +67,7 @@ const submit = handleSubmit(async (values) => {
         success.value = true
         setTimeout(() => { success.value = false }, 3000)
     } catch (e: any) {
-        submitError.value = apiErrorMessage(e, 'Failed to save snapshot sync settings')
+        submitError.value = apiErrorMessage(e, t('settingsSnapshotSync.saveFailed'))
     }
 })
 </script>
@@ -74,15 +76,12 @@ const submit = handleSubmit(async (values) => {
     <!-- Section header -->
     <div class="flex items-start justify-between gap-4 mb-6">
         <div>
-            <h2 class="text-base font-semibold">Snapshot Sync</h2>
+            <h2 class="text-base font-semibold">{{ t('settingsSnapshotSync.title') }}</h2>
             <p class="mt-1 text-sm text-muted-foreground">
-                Periodically re-read every destination's repository so snapshots removed or added outside
-                Arkeep — for example pruned by a cron job on an append-only server — are reflected here.
-                Each destination can also be synced on demand from its page.
-                Set the interval to <strong>0</strong> to disable the periodic sync.
+                {{ t('settingsSnapshotSync.description') }}
             </p>
         </div>
-        <Button variant="outline" size="icon" aria-label="Refresh" :disabled="loading" @click="fetchSettings">
+        <Button variant="outline" size="icon" :aria-label="t('common.refresh')" :disabled="loading" @click="fetchSettings">
             <RefreshCw class="size-4" :class="{ 'animate-spin': loading }" />
         </Button>
     </div>
@@ -109,17 +108,15 @@ const submit = handleSubmit(async (values) => {
                 leave-active-class="transition-all duration-150" leave-to-class="-translate-y-1 opacity-0">
                 <Alert v-if="success"
                     class="border-emerald-500/30 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400">
-                    <AlertDescription>Snapshot sync settings saved.</AlertDescription>
+                    <AlertDescription>{{ t('settingsSnapshotSync.saved') }}</AlertDescription>
                 </Alert>
             </Transition>
 
             <!-- ── Interval ─────────────────────────────────────────────────── -->
             <div class="flex flex-col gap-2 rounded-lg border px-4 py-3">
-                <Label for="interval_hours" class="text-sm font-medium">Sync every (hours)</Label>
+                <Label for="interval_hours" class="text-sm font-medium">{{ t('settingsSnapshotSync.intervalLabel') }}</Label>
                 <p class="text-xs text-muted-foreground">
-                    Lists each enabled destination's repository through a connected agent at this interval.
-                    Destinations with no agent online, or busy with a backup, are retried on the next run.
-                    Maximum 720 (30 days); 0 disables the periodic sync.
+                    {{ t('settingsSnapshotSync.intervalHelp') }}
                 </p>
                 <Input id="interval_hours" v-model="intervalHours" type="number" min="0" :max="720"
                     class="max-w-40" :class="intervalHoursError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
@@ -130,7 +127,7 @@ const submit = handleSubmit(async (values) => {
             <div class="flex justify-end pt-2">
                 <Button type="submit" :disabled="isSubmitting">
                     <Loader2 v-if="isSubmitting" class="size-4 animate-spin" />
-                    {{ isSubmitting ? 'Saving…' : 'Save Settings' }}
+                    {{ isSubmitting ? t('settingsSnapshotSync.saving') : t('settingsSnapshotSync.saveSettings') }}
                 </Button>
             </div>
 

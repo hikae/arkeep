@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useForm, useField } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
 import { z } from 'zod'
@@ -54,6 +55,8 @@ const emit = defineEmits<{
     saved: []
 }>()
 
+const { t } = useI18n()
+
 const isEdit = computed(() => !!props.destination)
 // Clone mode: pre-filled from an existing destination but created anew. isEdit
 // stays false so the form validates and submits exactly like a create.
@@ -65,13 +68,13 @@ const isClone = computed(() => !props.destination && !!props.cloneFrom)
 
 type DestType = 'local' | 's3' | 'sftp' | 'rest' | 'rclone'
 
-const DEST_TYPES: { value: DestType; label: string }[] = [
-    { value: 'local', label: 'Local Path' },
-    { value: 's3', label: 'S3 / Object Storage' },
-    { value: 'sftp', label: 'SFTP' },
-    { value: 'rest', label: 'REST Server' },
-    { value: 'rclone', label: 'Rclone' },
-]
+const DEST_TYPES = computed<{ value: DestType; label: string }[]>(() => [
+    { value: 'local', label: t('destinationSheet.types.local') },
+    { value: 's3', label: t('destinationSheet.types.s3') },
+    { value: 'sftp', label: t('destinationSheet.types.sftp') },
+    { value: 'rest', label: t('destinationSheet.types.rest') },
+    { value: 'rclone', label: t('destinationSheet.types.rclone') },
+])
 
 // ---------------------------------------------------------------------------
 // Per-type Zod schemas
@@ -80,34 +83,34 @@ const DEST_TYPES: { value: DestType; label: string }[] = [
 // Config schemas (stored unencrypted)
 const configSchemas: Record<DestType, z.ZodObject<any>> = {
     local: z.object({
-        path: z.string().min(1, 'Path is required'),
+        path: z.string().min(1, { error: () => t('destinationSheet.validation.pathRequired') }),
     }),
     s3: z.object({
-        bucket: z.string().min(1, 'Bucket is required'),
+        bucket: z.string().min(1, { error: () => t('destinationSheet.validation.bucketRequired') }),
         // No implicit default — a blank endpoint used to silently resolve to
         // AWS (server/internal/destutil/destutil.go), which is wrong for
         // Backblaze B2 and other S3-compatible providers.
-        endpoint: z.string().min(1, 'Endpoint is required'),
+        endpoint: z.string().min(1, { error: () => t('destinationSheet.validation.endpointRequired') }),
         region: z.string().optional(),
         prefix: z.string().optional(),
     }),
     sftp: z.object({
-        host: z.string().min(1, 'Host is required'),
-        port: z.string().regex(/^\s*(\d{1,5})?\s*$/, 'Port must be a number')
-            .refine((p) => !p.trim() || (Number(p) >= 1 && Number(p) <= 65535), 'Port must be between 1 and 65535')
+        host: z.string().min(1, { error: () => t('destinationSheet.validation.hostRequired') }),
+        port: z.string().regex(/^\s*(\d{1,5})?\s*$/, { error: () => t('destinationSheet.validation.portNumber') })
+            .refine((p) => !p.trim() || (Number(p) >= 1 && Number(p) <= 65535), { error: () => t('destinationSheet.validation.portRange') })
             .optional(),
-        user: z.string().min(1, 'Username is required'),
-        path: z.string().min(1, 'Path is required'),
+        user: z.string().min(1, { error: () => t('destinationSheet.validation.usernameRequired') }),
+        path: z.string().min(1, { error: () => t('destinationSheet.validation.pathRequired') }),
         // Checked by the server (ssh-keyscan lines or bare public keys).
         host_key: z.string().optional(),
     }),
     rest: z.object({
-        url: z.string().url('Must be a valid URL')
-            .refine((u) => /^https?:\/\//i.test(u), 'Must be an http or https URL'),
+        url: z.string().url({ error: () => t('destinationSheet.validation.urlInvalid') })
+            .refine((u) => /^https?:\/\//i.test(u), { error: () => t('destinationSheet.validation.urlHttp') }),
     }),
     rclone: z.object({
-        remote: z.string().min(1, 'Remote name is required'),
-        path: z.string().min(1, 'Path is required'),
+        remote: z.string().min(1, { error: () => t('destinationSheet.validation.remoteRequired') }),
+        path: z.string().min(1, { error: () => t('destinationSheet.validation.pathRequired') }),
     }),
 }
 
@@ -115,8 +118,8 @@ const configSchemas: Record<DestType, z.ZodObject<any>> = {
 const credSchemas: Record<DestType, z.ZodObject<any>> = {
     local: z.object({}),
     s3: z.object({
-        access_key: z.string().min(1, 'Access key is required'),
-        secret_key: z.string().min(1, 'Secret key is required'),
+        access_key: z.string().min(1, { error: () => t('destinationSheet.validation.accessKeyRequired') }),
+        secret_key: z.string().min(1, { error: () => t('destinationSheet.validation.secretKeyRequired') }),
     }),
     // rclone needs one of the two: the agent has no ssh-agent to fall back on.
     sftp: z.object({
@@ -124,7 +127,7 @@ const credSchemas: Record<DestType, z.ZodObject<any>> = {
         private_key: z.string().optional(),
     }).refine((c) => !!c.password?.trim() || !!c.private_key?.trim(), {
         path: ['password'],
-        message: 'Enter a password or a private key',
+        error: () => t('destinationSheet.validation.passwordOrKey'),
     }),
     rest: z.object({
         user: z.string().optional(),
@@ -139,14 +142,14 @@ const credSchemas: Record<DestType, z.ZodObject<any>> = {
 // schedule fully detached from any backup job.
 // ---------------------------------------------------------------------------
 
-const RETENTION_SCHEDULE_PRESETS = [
-    { label: 'Every hour', value: '0 * * * *' },
-    { label: 'Daily at 02:00', value: '0 2 * * *' },
-    { label: 'Daily at midnight', value: '0 0 * * *' },
-    { label: 'Weekly (Sunday)', value: '0 2 * * 0' },
-    { label: 'Weekly (Monday)', value: '0 2 * * 1' },
-    { label: 'Monthly', value: '0 2 1 * *' },
-]
+const RETENTION_SCHEDULE_PRESETS = computed(() => [
+    { label: t('policySheet.schedulePresets.everyHour'), value: '0 * * * *' },
+    { label: t('policySheet.schedulePresets.dailyAt'), value: '0 2 * * *' },
+    { label: t('policySheet.schedulePresets.dailyAtMidnight'), value: '0 0 * * *' },
+    { label: t('policySheet.schedulePresets.weeklySunday'), value: '0 2 * * 0' },
+    { label: t('policySheet.schedulePresets.weeklyMonday'), value: '0 2 * * 1' },
+    { label: t('policySheet.schedulePresets.monthly'), value: '0 2 1 * *' },
+])
 
 // ---------------------------------------------------------------------------
 // Integrity check (issue #307) — restic check on its own schedule, run by the
@@ -156,17 +159,17 @@ const RETENTION_SCHEDULE_PRESETS = [
 // ---------------------------------------------------------------------------
 
 const DEFAULT_CHECK_SCHEDULE = '0 3 * * 0'
-const CHECK_SCHEDULE_PRESETS = [
-    { label: 'Daily at 03:00', value: '0 3 * * *' },
-    { label: 'Weekly (Sunday)', value: DEFAULT_CHECK_SCHEDULE },
-    { label: 'Monthly', value: '0 3 1 * *' },
-]
+const CHECK_SCHEDULE_PRESETS = computed(() => [
+    { label: t('policySheet.schedulePresets.dailyAt', { time: '03:00' }), value: '0 3 * * *' },
+    { label: t('policySheet.schedulePresets.weeklySunday'), value: DEFAULT_CHECK_SCHEDULE },
+    { label: t('policySheet.schedulePresets.monthly'), value: '0 3 1 * *' },
+])
 
-const CHECK_MODES: { value: CheckMode; label: string; description: string }[] = [
-    { value: 'structure', label: 'Structure only', description: 'Verifies the repository structure and metadata. Fast, but does not read the backed-up data.' },
-    { value: 'subset', label: 'Read a subset of the data', description: 'Also reads and verifies a random share of the data on every run, so the whole repository is covered over time.' },
-    { value: 'full', label: 'Read all data', description: 'Reads and verifies every pack file. Thorough, but downloads the whole repository on every run.' },
-]
+const CHECK_MODES = computed<{ value: CheckMode; label: string; description: string }[]>(() => [
+    { value: 'structure', label: t('destinationSheet.checkStructure'), description: t('destinationSheet.checkStructureDescription') },
+    { value: 'subset', label: t('destinationSheet.checkSubset'), description: t('destinationSheet.checkSubsetDescription') },
+    { value: 'full', label: t('destinationSheet.checkFull'), description: t('destinationSheet.checkFullDescription') },
+])
 
 // ---------------------------------------------------------------------------
 // Form
@@ -259,7 +262,7 @@ const subsetPercent = integerInRange(1, 100)
 
 const schema = toTypedSchema(
     z.object({
-        name: z.string().trim().min(1, 'Name is required'),
+        name: z.string().trim().min(1, { error: () => t('validation.nameRequired') }),
         enabled: z.boolean(),
         type: z.enum(['local', 's3', 'sftp', 'rest', 'rclone']),
         local_path: z.string(),
@@ -309,15 +312,15 @@ const schema = toTypedSchema(
         // Retention is hidden, and never enabled, on an append-only destination.
         const retentionOn = v.retention_enabled && !v.append_only
         if (retentionOn) {
-            if (!v.retention_schedule.trim()) issue('retention_schedule', 'A schedule is required.')
+            if (!v.retention_schedule.trim()) issue('retention_schedule', t('destinationSheet.validation.scheduleRequired'))
             // With no keep rule restic forget removes nothing.
             if (RETENTION_KEEP_FIELDS.every((f) => Number(v[f]) === 0)) {
-                issue('retention_keep', 'Set at least one keep value above 0.')
+                issue('retention_keep', t('destinationSheet.validation.keepRequired'))
             }
         }
 
         if (v.check_enabled) {
-            if (!v.check_schedule.trim()) issue('check_schedule', 'A schedule is required.')
+            if (!v.check_schedule.trim()) issue('check_schedule', t('destinationSheet.validation.scheduleRequired'))
             if (v.check_mode === 'subset') {
                 const result = subsetPercent.safeParse(v.check_subset_percent)
                 if (!result.success) issue('check_subset_percent', result.error.issues[0]!.message)
@@ -326,14 +329,14 @@ const schema = toTypedSchema(
 
         // The maintenance agent runs both retention sweeps and integrity checks.
         if ((retentionOn || v.check_enabled) && !v.retention_agent_id) {
-            issue('retention_agent_id', 'An agent is required to run retention sweeps and integrity checks.')
+            issue('retention_agent_id', t('destinationSheet.validation.agentRequired'))
         }
 
         // Importing an existing repository needs an agent to read it and its
         // password; offered on create only.
         if (!isEdit.value && v.import_enabled) {
-            if (!v.import_agent_id) issue('import_agent_id', 'Please select an agent.')
-            if (!v.import_repo_password) issue('import_repo_password', 'Repository password is required.')
+            if (!v.import_agent_id) issue('import_agent_id', t('destinationSheet.validation.importAgentRequired'))
+            if (!v.import_repo_password) issue('import_repo_password', t('destinationSheet.validation.importPasswordRequired'))
         }
     }),
 )
@@ -431,7 +434,7 @@ function valuesFromDestination(dest: Destination, asClone: boolean): FormValues 
         type: dest.type as DestType,
         // Clone starts from a suggested "Copy of …" name; credentials are never
         // copied (the form never echoes secrets), so the user must re-enter them.
-        name: asClone ? `Copy of ${dest.name}` : dest.name,
+        name: asClone ? t('destinationSheet.cloneName', { name: dest.name }) : dest.name,
         enabled: dest.enabled,
         append_only: dest.append_only,
         retention_enabled: dest.retention_enabled,
@@ -585,7 +588,7 @@ const onSubmit = handleSubmit(async (formValues) => {
         emit('update:open', false)
         emit('saved')
     } catch (e: any) {
-        const msg = apiErrorMessage(e, 'An error occurred')
+        const msg = apiErrorMessage(e, t('destinationSheet.submitFailed'))
         if (values.import_enabled && !isEdit.value) {
             importError.value = msg
         } else {
@@ -610,9 +613,9 @@ function onOpenChange(value: boolean) {
     <Sheet :open="props.open" @update:open="onOpenChange">
         <SheetContent class="sm:max-w-lg overflow-y-auto">
             <SheetHeader>
-                <SheetTitle>{{ creationDone ? 'Destination Created' : (isEdit ? 'Edit Destination' : isClone ? 'Clone Destination' : 'New Destination') }}</SheetTitle>
+                <SheetTitle>{{ creationDone ? t('destinationSheet.createdTitle') : (isEdit ? t('destinationSheet.editTitle') : isClone ? t('destinationSheet.cloneTitle') : t('destinationSheet.newTitle')) }}</SheetTitle>
                 <SheetDescription>
-                    {{ creationDone ? 'The destination has been saved.' : (isEdit ? 'Update the destination settings.' : isClone ? 'Review the copied settings and re-enter the credentials.' : 'Configure a new backup storage target.') }}
+                    {{ creationDone ? t('destinationSheet.createdDescription') : (isEdit ? t('destinationSheet.editDescription') : isClone ? t('destinationSheet.cloneDescription') : t('destinationSheet.newDescription')) }}
                 </SheetDescription>
             </SheetHeader>
 
@@ -622,7 +625,7 @@ function onOpenChange(value: boolean) {
                     <div class="flex items-center gap-3">
                         <CheckCircle2 class="size-5 text-green-500 shrink-0" />
                         <div>
-                            <p class="text-sm font-medium">Destination saved</p>
+                            <p class="text-sm font-medium">{{ t('destinationSheet.destinationSaved') }}</p>
                             <p class="text-xs text-muted-foreground">{{ name }}</p>
                         </div>
                     </div>
@@ -639,7 +642,7 @@ function onOpenChange(value: boolean) {
                         </div>
                     </div>
                 </div>
-                <Button class="self-start" @click="onDone">Done</Button>
+                <Button class="self-start" @click="onDone">{{ t('destinationSheet.done') }}</Button>
             </div>
 
             <form v-else class="py-6 px-4" novalidate @submit="onSubmit">
@@ -657,19 +660,19 @@ function onOpenChange(value: boolean) {
 
                     <!-- Name -->
                     <Field>
-                        <FieldLabel for="dest-name">Name</FieldLabel>
-                        <Input id="dest-name" v-model="name" placeholder="e.g. Primary S3 Bucket" autocomplete="off"
+                        <FieldLabel for="dest-name">{{ t('destinationSheet.name') }}</FieldLabel>
+                        <Input id="dest-name" v-model="name" :placeholder="t('destinationSheet.namePlaceholder')" autocomplete="off"
                             :class="nameError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                         <FieldError v-if="nameError">{{ nameError }}</FieldError>
                     </Field>
 
                     <!-- Type — disabled in edit mode -->
                     <Field>
-                        <FieldLabel>Type</FieldLabel>
+                        <FieldLabel>{{ t('destinationSheet.type') }}</FieldLabel>
                         <Select :model-value="selectedType" :disabled="isEdit"
                             @update:model-value="selectedType = $event as DestType">
                             <SelectTrigger>
-                                <SelectValue placeholder="Select type" />
+                                <SelectValue :placeholder="t('destinationSheet.selectType')" />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem v-for="t in DEST_TYPES" :key="t.value" :value="t.value">
@@ -678,7 +681,7 @@ function onOpenChange(value: boolean) {
                             </SelectContent>
                         </Select>
                         <p v-if="isEdit" class="text-muted-foreground text-xs">
-                            Type cannot be changed after creation.
+                            {{ t('destinationSheet.typeFixed') }}
                         </p>
                     </Field>
 
@@ -687,8 +690,8 @@ function onOpenChange(value: boolean) {
                     <!-- ── Local ── -->
                     <template v-if="selectedType === 'local'">
                         <Field>
-                            <FieldLabel for="local-path">Path</FieldLabel>
-                            <Input id="local-path" v-model="localPath" placeholder="/mnt/backups" autocomplete="off"
+                            <FieldLabel for="local-path">{{ t('destinationSheet.path') }}</FieldLabel>
+                            <Input id="local-path" v-model="localPath" :placeholder="t('destinationSheet.pathPlaceholder')" autocomplete="off"
                                 :class="localPathError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                             <FieldError v-if="localPathError">{{ localPathError }}</FieldError>
                         </Field>
@@ -697,52 +700,51 @@ function onOpenChange(value: boolean) {
                     <!-- ── S3 ── -->
                     <template v-if="selectedType === 's3'">
                         <Field>
-                            <FieldLabel for="s3-bucket">Bucket</FieldLabel>
-                            <Input id="s3-bucket" v-model="s3Bucket" placeholder="my-backup-bucket" autocomplete="off"
+                            <FieldLabel for="s3-bucket">{{ t('destinationSheet.bucket') }}</FieldLabel>
+                            <Input id="s3-bucket" v-model="s3Bucket" :placeholder="t('destinationSheet.bucketPlaceholder')" autocomplete="off"
                                 :class="s3BucketError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                             <FieldError v-if="s3BucketError">{{ s3BucketError }}</FieldError>
                         </Field>
                         <Field>
-                            <FieldLabel for="s3-endpoint">Endpoint</FieldLabel>
+                            <FieldLabel for="s3-endpoint">{{ t('destinationSheet.endpoint') }}</FieldLabel>
                             <Input id="s3-endpoint" v-model="s3Endpoint" autocomplete="off"
-                                placeholder="s3.amazonaws.com or s3.us-west-002.backblazeb2.com"
+                                :placeholder="t('destinationSheet.endpointPlaceholder')"
                                 :class="s3EndpointError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                             <FieldError v-if="s3EndpointError">{{ s3EndpointError }}</FieldError>
                             <p class="text-muted-foreground text-xs">
-                                Required — the S3-compatible endpoint for this provider (AWS, Backblaze B2, MinIO, etc.).
-                                Leaving this blank does not mean "use AWS".
+                                {{ t('destinationSheet.endpointHelp') }}
                             </p>
                         </Field>
                         <div class="grid grid-cols-2 gap-3">
                             <Field>
                                 <FieldLabel for="s3-region">
-                                    Region <span class="text-muted-foreground font-normal">(optional)</span>
+                                    {{ t('destinationSheet.region') }} <span class="text-muted-foreground font-normal">{{ t('common.optional') }}</span>
                                 </FieldLabel>
                                 <Input id="s3-region" v-model="s3Region" placeholder="us-east-1" autocomplete="off" />
                             </Field>
                             <Field>
                                 <FieldLabel for="s3-prefix">
-                                    Prefix <span class="text-muted-foreground font-normal">(optional)</span>
+                                    {{ t('destinationSheet.prefix') }} <span class="text-muted-foreground font-normal">{{ t('common.optional') }}</span>
                                 </FieldLabel>
                                 <Input id="s3-prefix" v-model="s3Prefix" placeholder="backups/" autocomplete="off" />
                             </Field>
                         </div>
 
                         <Separator />
-                        <p class="text-sm font-medium">Credentials</p>
+                        <p class="text-sm font-medium">{{ t('destinationSheet.credentials') }}</p>
                         <p v-if="isEdit" class="text-muted-foreground text-xs -mt-2">
-                            Leave blank to keep the current credentials.
+                            {{ t('destinationSheet.keepCredentials') }}
                         </p>
 
                         <Field>
-                            <FieldLabel for="s3-access-key">Access Key ID</FieldLabel>
+                            <FieldLabel for="s3-access-key">{{ t('destinationSheet.accessKey') }}</FieldLabel>
                             <Input id="s3-access-key" v-model="s3AccessKey" autocomplete="off"
                                 :class="s3AccessKeyError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                             <FieldError v-if="s3AccessKeyError">{{ s3AccessKeyError }}
                             </FieldError>
                         </Field>
                         <Field>
-                            <FieldLabel for="s3-secret-key">Secret Access Key</FieldLabel>
+                            <FieldLabel for="s3-secret-key">{{ t('destinationSheet.secretKey') }}</FieldLabel>
                             <Input id="s3-secret-key" v-model="s3SecretKey" type="password" autocomplete="off"
                                 :class="s3SecretKeyError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                             <FieldError v-if="s3SecretKeyError">{{ s3SecretKeyError }}
@@ -754,14 +756,14 @@ function onOpenChange(value: boolean) {
                     <template v-if="selectedType === 'sftp'">
                         <div class="grid grid-cols-3 gap-3">
                             <Field class="col-span-2">
-                                <FieldLabel for="sftp-host">Host</FieldLabel>
-                                <Input id="sftp-host" v-model="sftpHost" placeholder="backup.example.com" autocomplete="off"
+                                <FieldLabel for="sftp-host">{{ t('destinationSheet.host') }}</FieldLabel>
+                                <Input id="sftp-host" v-model="sftpHost" :placeholder="t('destinationSheet.hostPlaceholder')" autocomplete="off"
                                     :class="sftpHostError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                                 <FieldError v-if="sftpHostError">{{ sftpHostError }}</FieldError>
                             </Field>
                             <Field>
                                 <FieldLabel for="sftp-port">
-                                    Port <span class="text-muted-foreground font-normal">(opt.)</span>
+                                    {{ t('destinationSheet.port') }} <span class="text-muted-foreground font-normal">{{ t('destinationSheet.optionalShort') }}</span>
                                 </FieldLabel>
                                 <Input id="sftp-port" v-model="sftpPort" placeholder="22" autocomplete="off"
                                     :class="sftpPortError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
@@ -769,30 +771,30 @@ function onOpenChange(value: boolean) {
                             </Field>
                         </div>
                         <Field>
-                            <FieldLabel for="sftp-user">Username</FieldLabel>
-                            <Input id="sftp-user" v-model="sftpUser" placeholder="backup-user" autocomplete="off"
+                            <FieldLabel for="sftp-user">{{ t('destinationSheet.username') }}</FieldLabel>
+                            <Input id="sftp-user" v-model="sftpUser" :placeholder="t('destinationSheet.usernamePlaceholder')" autocomplete="off"
                                 :class="sftpUserError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                             <FieldError v-if="sftpUserError">{{ sftpUserError }}</FieldError>
                         </Field>
                         <Field>
-                            <FieldLabel for="sftp-path">Remote Path</FieldLabel>
-                            <Input id="sftp-path" v-model="sftpPath" placeholder="/home/backup-user/restic" autocomplete="off"
+                            <FieldLabel for="sftp-path">{{ t('destinationSheet.remotePath') }}</FieldLabel>
+                            <Input id="sftp-path" v-model="sftpPath" :placeholder="t('destinationSheet.remotePathPlaceholder')" autocomplete="off"
                                 :class="sftpPathError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                             <FieldError v-if="sftpPathError">{{ sftpPathError }}</FieldError>
                         </Field>
 
                         <Separator />
                         <p class="text-sm font-medium">
-                            Authentication
-                            <span class="text-muted-foreground font-normal"> (password or private key)</span>
+                            {{ t('destinationSheet.authentication') }}
+                            <span class="text-muted-foreground font-normal"> {{ t('destinationSheet.passwordOrKey') }}</span>
                         </p>
                         <p v-if="isEdit" class="text-muted-foreground text-xs -mt-2">
-                            Leave blank to keep the current credentials.
+                            {{ t('destinationSheet.keepCredentials') }}
                         </p>
 
                         <Field>
                             <FieldLabel for="sftp-password">
-                                Password <span class="text-muted-foreground font-normal">(optional)</span>
+                                {{ t('destinationSheet.passwordOptional') }} <span class="text-muted-foreground font-normal">{{ t('common.optional') }}</span>
                             </FieldLabel>
                             <Input id="sftp-password" v-model="sftpPassword" type="password" autocomplete="off"
                                 :class="sftpPasswordError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
@@ -800,7 +802,7 @@ function onOpenChange(value: boolean) {
                         </Field>
                         <Field>
                             <FieldLabel for="sftp-key">
-                                Private Key (PEM) <span class="text-muted-foreground font-normal">(optional)</span>
+                                {{ t('destinationSheet.privateKey') }} <span class="text-muted-foreground font-normal">{{ t('common.optional') }}</span>
                             </FieldLabel>
                             <textarea id="sftp-key" v-model="sftpPrivateKey" rows="4"
                                 placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"
@@ -810,7 +812,7 @@ function onOpenChange(value: boolean) {
                         <Separator />
                         <Field>
                             <FieldLabel for="sftp-host-key">
-                                Host Key <span class="text-muted-foreground font-normal">(recommended)</span>
+                                {{ t('destinationSheet.hostKey') }} <span class="text-muted-foreground font-normal">{{ t('destinationSheet.recommended') }}</span>
                             </FieldLabel>
                             <textarea id="sftp-host-key" v-model="sftpHostKey" rows="3"
                                 placeholder="backup.example.com ssh-ed25519 AAAA…"
@@ -818,13 +820,11 @@ function onOpenChange(value: boolean) {
                                 :class="sftpHostKeyError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                             <FieldError v-if="sftpHostKeyError">{{ sftpHostKeyError }}</FieldError>
                             <p class="text-muted-foreground text-xs">
-                                Paste the output of <code>ssh-keyscan -p {{ sftpPort || '22' }} {{ sftpHost || '<host>' }}</code>,
-                                run from a network you trust. Agents then refuse a server presenting another key.
+                                {{ t('destinationSheet.hostKeyHelp', { port: sftpPort || '22', host: sftpHost || '<host>' }) }}
                             </p>
                             <p v-if="!sftpHostKey.trim()" data-testid="sftp-host-key-warning"
                                 class="text-amber-600 dark:text-amber-400 text-xs">
-                                Without a host key the server's identity is not verified: whoever sits on the network
-                                path could receive the credentials and the backups.
+                                {{ t('destinationSheet.hostKeyWarning') }}
                             </p>
                         </Field>
                     </template>
@@ -832,7 +832,7 @@ function onOpenChange(value: boolean) {
                     <!-- ── REST ── -->
                     <template v-if="selectedType === 'rest'">
                         <Field>
-                            <FieldLabel for="rest-url">REST Server URL</FieldLabel>
+                            <FieldLabel for="rest-url">{{ t('destinationSheet.restUrl') }}</FieldLabel>
                             <Input id="rest-url" v-model="restUrl" placeholder="https://rest.example.com/repo" autocomplete="off"
                                 :class="restUrlError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                             <FieldError v-if="restUrlError">{{ restUrlError }}</FieldError>
@@ -840,19 +840,19 @@ function onOpenChange(value: boolean) {
 
                         <Separator />
                         <p class="text-sm font-medium">
-                            Credentials
-                            <span class="text-muted-foreground font-normal"> (optional)</span>
+                            {{ t('destinationSheet.credentials') }}
+                            <span class="text-muted-foreground font-normal"> {{ t('common.optional') }}</span>
                         </p>
                         <p v-if="isEdit" class="text-muted-foreground text-xs -mt-2">
-                            Leave blank to keep the current credentials.
+                            {{ t('destinationSheet.keepCredentials') }}
                         </p>
 
                         <Field>
-                            <FieldLabel for="rest-user">Username</FieldLabel>
+                            <FieldLabel for="rest-user">{{ t('destinationSheet.username') }}</FieldLabel>
                             <Input id="rest-user" v-model="restUser" autocomplete="off" />
                         </Field>
                         <Field>
-                            <FieldLabel for="rest-password">Password</FieldLabel>
+                            <FieldLabel for="rest-password">{{ t('common.password') }}</FieldLabel>
                             <Input id="rest-password" v-model="restPassword" type="password" autocomplete="off" />
                         </Field>
                     </template>
@@ -860,17 +860,17 @@ function onOpenChange(value: boolean) {
                     <!-- ── Rclone ── -->
                     <template v-if="selectedType === 'rclone'">
                         <Field>
-                            <FieldLabel for="rclone-remote">Remote Name</FieldLabel>
-                            <Input id="rclone-remote" v-model="rcloneRemote" placeholder="myremote" autocomplete="off"
+                            <FieldLabel for="rclone-remote">{{ t('destinationSheet.rcloneRemote') }}</FieldLabel>
+                            <Input id="rclone-remote" v-model="rcloneRemote" :placeholder="t('destinationSheet.rcloneRemotePlaceholder')" autocomplete="off"
                                 :class="rcloneRemoteError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                             <p class="text-muted-foreground text-xs">
-                                Must match a remote configured in rclone.conf on the agent.
+                                {{ t('destinationSheet.rcloneRemoteHelp') }}
                             </p>
                             <FieldError v-if="rcloneRemoteError">{{ rcloneRemoteError }}</FieldError>
                         </Field>
                         <Field>
-                            <FieldLabel for="rclone-path">Path</FieldLabel>
-                            <Input id="rclone-path" v-model="rclonePath" placeholder="bucket/backups" autocomplete="off"
+                            <FieldLabel for="rclone-path">{{ t('destinationSheet.path') }}</FieldLabel>
+                            <Input id="rclone-path" v-model="rclonePath" :placeholder="t('destinationSheet.rclonePathPlaceholder')" autocomplete="off"
                                 :class="rclonePathError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                             <FieldError v-if="rclonePathError">{{ rclonePathError }}</FieldError>
                         </Field>
@@ -884,12 +884,9 @@ function onOpenChange(value: boolean) {
 
                     <div class="flex items-center justify-between">
                         <div>
-                            <p class="text-sm font-medium">Append-only destination</p>
+                            <p class="text-sm font-medium">{{ t('destinationSheet.appendOnly') }}</p>
                             <p class="text-muted-foreground text-xs">
-                                Snapshots here can only be added, never deleted or pruned
-                                (e.g. object-lock / WORM storage). Retention cannot run —
-                                configure deletion outside Arkeep if needed. Integrity
-                                checks still run: they only read the repository.
+                                {{ t('destinationSheet.appendOnlyHelp') }}
                             </p>
                         </div>
                         <Switch :model-value="appendOnly" @update:model-value="(v: boolean) => { appendOnly = v; if (v) retentionEnabled = false }" />
@@ -898,9 +895,7 @@ function onOpenChange(value: boolean) {
                     <Alert v-if="appendOnly" variant="default" class="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30">
                         <AlertCircle class="h-4 w-4 text-amber-600 dark:text-amber-400" />
                         <AlertDescription class="text-amber-800 dark:text-amber-300 text-xs">
-                            Retention is disabled for append-only destinations. `forget --prune`
-                            can never succeed against storage that rejects deletes, so no
-                            scheduling controls are shown.
+                            {{ t('destinationSheet.appendOnlyWarning') }}
                         </AlertDescription>
                     </Alert>
 
@@ -908,25 +903,22 @@ function onOpenChange(value: boolean) {
                         <Alert v-if="retentionNeedsReview" variant="destructive">
                             <AlertTriangle class="h-4 w-4" />
                             <AlertDescription class="text-xs">
-                                This destination was shared by multiple policies with different
-                                retention settings before this update — retention was left
-                                disabled. Configure it explicitly below to resolve this.
+                                {{ t('destinationSheet.needsReviewWarning') }}
                             </AlertDescription>
                         </Alert>
 
                         <div class="flex items-center justify-between">
                             <div>
-                                <p class="text-sm font-medium">Enable retention</p>
+                                <p class="text-sm font-medium">{{ t('destinationSheet.enableRetention') }}</p>
                                 <p class="text-muted-foreground text-xs">
-                                    Run a scheduled `restic forget --prune` sweep for this
-                                    destination, independent of any policy's backup schedule.
+                                    {{ t('destinationSheet.enableRetentionHelp') }}
                                 </p>
                             </div>
                             <Switch :model-value="retentionEnabled" @update:model-value="retentionEnabled = $event" />
                         </div>
 
                         <template v-if="retentionEnabled">
-                            <p class="text-sm font-medium">Schedule</p>
+                            <p class="text-sm font-medium">{{ t('destinationSheet.schedule') }}</p>
                             <div class="flex flex-wrap gap-1.5">
                                 <button v-for="preset in RETENTION_SCHEDULE_PRESETS" :key="preset.value" type="button"
                                     class="rounded-full border px-2.5 py-0.5 text-xs transition-colors"
@@ -938,25 +930,25 @@ function onOpenChange(value: boolean) {
                                 </button>
                             </div>
                             <Field>
-                                <FieldLabel for="retention-schedule">Cron Expression</FieldLabel>
+                                <FieldLabel for="retention-schedule">{{ t('destinationSheet.cronExpression') }}</FieldLabel>
                                 <Input id="retention-schedule" v-model="retentionSchedule" class="font-mono" placeholder="0 2 * * *"
                                     :class="retentionScheduleError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                                 <FieldError v-if="retentionScheduleError">{{ retentionScheduleError }}</FieldError>
                             </Field>
 
-                            <p class="text-sm font-medium">Retention</p>
+                            <p class="text-sm font-medium">{{ t('destinationSheet.retention') }}</p>
                             <p class="text-muted-foreground text-xs -mt-2">
-                                Number of snapshots to keep per rule. Set to 0 to disable that rule.
+                                {{ t('destinationSheet.retentionHelp') }}
                             </p>
                             <div class="grid grid-cols-2 gap-3">
                                 <Field>
                                     <FieldLabel for="ret-last" class="flex items-center gap-1">
-                                        Last
+                                        {{ t('destinationSheet.retentionLast') }}
                                         <Tooltip>
                                             <TooltipTrigger class="text-muted-foreground hover:text-foreground">
                                                 <svg xmlns="http://www.w3.org/2000/svg" class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
                                             </TooltipTrigger>
-                                            <TooltipContent class="max-w-60">Keep the N most recent snapshots regardless of when they were taken. Useful to ensure at least N backups are always available.</TooltipContent>
+                                            <TooltipContent class="max-w-60">{{ t('destinationSheet.tipLast') }}</TooltipContent>
                                         </Tooltip>
                                     </FieldLabel>
                                     <Input id="ret-last" v-model="retentionLast" type="number" min="0" :max="MAX_RETENTION_KEEP"
@@ -965,12 +957,12 @@ function onOpenChange(value: boolean) {
                                 </Field>
                                 <Field>
                                     <FieldLabel for="ret-hourly" class="flex items-center gap-1">
-                                        Hourly
+                                        {{ t('destinationSheet.retentionHourly') }}
                                         <Tooltip>
                                             <TooltipTrigger class="text-muted-foreground hover:text-foreground">
                                                 <svg xmlns="http://www.w3.org/2000/svg" class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
                                             </TooltipTrigger>
-                                            <TooltipContent class="max-w-60">Keep the most recent snapshot for each of the last N hours that contain a snapshot.</TooltipContent>
+                                            <TooltipContent class="max-w-60">{{ t('destinationSheet.tipHourly') }}</TooltipContent>
                                         </Tooltip>
                                     </FieldLabel>
                                     <Input id="ret-hourly" v-model="retentionHourly" type="number" min="0" :max="MAX_RETENTION_KEEP"
@@ -979,12 +971,12 @@ function onOpenChange(value: boolean) {
                                 </Field>
                                 <Field>
                                     <FieldLabel for="ret-daily" class="flex items-center gap-1">
-                                        Daily
+                                        {{ t('destinationSheet.retentionDaily') }}
                                         <Tooltip>
                                             <TooltipTrigger class="text-muted-foreground hover:text-foreground">
                                                 <svg xmlns="http://www.w3.org/2000/svg" class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
                                             </TooltipTrigger>
-                                            <TooltipContent class="max-w-60">Keep the most recent snapshot for each of the last N days that contain a snapshot.</TooltipContent>
+                                            <TooltipContent class="max-w-60">{{ t('destinationSheet.tipDaily') }}</TooltipContent>
                                         </Tooltip>
                                     </FieldLabel>
                                     <Input id="ret-daily" v-model="retentionDaily" type="number" min="0" :max="MAX_RETENTION_KEEP"
@@ -993,12 +985,12 @@ function onOpenChange(value: boolean) {
                                 </Field>
                                 <Field>
                                     <FieldLabel for="ret-weekly" class="flex items-center gap-1">
-                                        Weekly
+                                        {{ t('destinationSheet.retentionWeekly') }}
                                         <Tooltip>
                                             <TooltipTrigger class="text-muted-foreground hover:text-foreground">
                                                 <svg xmlns="http://www.w3.org/2000/svg" class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
                                             </TooltipTrigger>
-                                            <TooltipContent class="max-w-60">Keep the most recent snapshot for each of the last N weeks.</TooltipContent>
+                                            <TooltipContent class="max-w-60">{{ t('destinationSheet.tipWeekly') }}</TooltipContent>
                                         </Tooltip>
                                     </FieldLabel>
                                     <Input id="ret-weekly" v-model="retentionWeekly" type="number" min="0" :max="MAX_RETENTION_KEEP"
@@ -1007,12 +999,12 @@ function onOpenChange(value: boolean) {
                                 </Field>
                                 <Field>
                                     <FieldLabel for="ret-monthly" class="flex items-center gap-1">
-                                        Monthly
+                                        {{ t('destinationSheet.retentionMonthly') }}
                                         <Tooltip>
                                             <TooltipTrigger class="text-muted-foreground hover:text-foreground">
                                                 <svg xmlns="http://www.w3.org/2000/svg" class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
                                             </TooltipTrigger>
-                                            <TooltipContent class="max-w-60">Keep the most recent snapshot for each of the last N months.</TooltipContent>
+                                            <TooltipContent class="max-w-60">{{ t('destinationSheet.tipMonthly') }}</TooltipContent>
                                         </Tooltip>
                                     </FieldLabel>
                                     <Input id="ret-monthly" v-model="retentionMonthly" type="number" min="0" :max="MAX_RETENTION_KEEP"
@@ -1021,12 +1013,12 @@ function onOpenChange(value: boolean) {
                                 </Field>
                                 <Field>
                                     <FieldLabel for="ret-yearly" class="flex items-center gap-1">
-                                        Yearly
+                                        {{ t('destinationSheet.retentionYearly') }}
                                         <Tooltip>
                                             <TooltipTrigger class="text-muted-foreground hover:text-foreground">
                                                 <svg xmlns="http://www.w3.org/2000/svg" class="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
                                             </TooltipTrigger>
-                                            <TooltipContent class="max-w-60">Keep the most recent snapshot for each of the last N years.</TooltipContent>
+                                            <TooltipContent class="max-w-60">{{ t('destinationSheet.tipYearly') }}</TooltipContent>
                                         </Tooltip>
                                     </FieldLabel>
                                     <Input id="ret-yearly" v-model="retentionYearly" type="number" min="0" :max="MAX_RETENTION_KEEP"
@@ -1046,10 +1038,9 @@ function onOpenChange(value: boolean) {
 
                     <div class="flex items-center justify-between">
                         <div>
-                            <p class="text-sm font-medium">Enable integrity check</p>
+                            <p class="text-sm font-medium">{{ t('destinationSheet.enableCheck') }}</p>
                             <p class="text-muted-foreground text-xs">
-                                Run a scheduled `restic check` to verify the repository is
-                                intact and its data still readable.
+                                {{ t('destinationSheet.enableCheckHelp') }}
                             </p>
                         </div>
                         <Switch :model-value="checkEnabled" @update:model-value="checkEnabled = $event" />
@@ -1057,7 +1048,7 @@ function onOpenChange(value: boolean) {
 
                     <template v-if="checkEnabled">
                         <Field>
-                            <FieldLabel for="check-mode">Check Depth</FieldLabel>
+                            <FieldLabel for="check-mode">{{ t('destinationSheet.checkDepth') }}</FieldLabel>
                             <Select :model-value="checkMode" @update:model-value="checkMode = $event as CheckMode">
                                 <SelectTrigger id="check-mode">
                                     <SelectValue />
@@ -1074,13 +1065,13 @@ function onOpenChange(value: boolean) {
                         </Field>
 
                         <Field v-if="checkMode === 'subset'">
-                            <FieldLabel for="check-subset">Data to Read per Run (%)</FieldLabel>
+                            <FieldLabel for="check-subset">{{ t('destinationSheet.dataPercent') }}</FieldLabel>
                             <Input id="check-subset" v-model="checkSubsetPercent" type="number" min="1" max="100"
                                 :class="checkSubsetPercentError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                             <FieldError v-if="checkSubsetPercentError">{{ checkSubsetPercentError }}</FieldError>
                         </Field>
 
-                        <p class="text-sm font-medium">Schedule</p>
+                        <p class="text-sm font-medium">{{ t('destinationSheet.schedule') }}</p>
                         <div class="flex flex-wrap gap-1.5">
                             <button v-for="preset in CHECK_SCHEDULE_PRESETS" :key="preset.value" type="button"
                                 class="rounded-full border px-2.5 py-0.5 text-xs transition-colors"
@@ -1092,7 +1083,7 @@ function onOpenChange(value: boolean) {
                             </button>
                         </div>
                         <Field>
-                            <FieldLabel for="check-schedule">Cron Expression</FieldLabel>
+                            <FieldLabel for="check-schedule">{{ t('destinationSheet.cronExpression') }}</FieldLabel>
                             <Input id="check-schedule" v-model="checkSchedule" class="font-mono" :placeholder="DEFAULT_CHECK_SCHEDULE"
                                 :class="checkScheduleError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                             <FieldError v-if="checkScheduleError">{{ checkScheduleError }}</FieldError>
@@ -1102,18 +1093,17 @@ function onOpenChange(value: boolean) {
                     <!-- Maintenance agent — runs both retention sweeps and integrity
                          checks, so it is shown as soon as either is enabled. -->
                     <Field v-if="needsMaintenanceAgent">
-                        <FieldLabel for="retention-agent">Maintenance Agent</FieldLabel>
+                        <FieldLabel for="retention-agent">{{ t('destinationSheet.maintenanceAgent') }}</FieldLabel>
                         <AsyncCombobox
                             endpoint="/api/v1/agents"
                             :model-value="retentionAgentId"
                             :initial-label="props.destination?.retention_agent_name"
-                            placeholder="Select an agent"
+                            :placeholder="t('destinationSheet.selectAgent')"
                             :class="retentionAgentError ? '[&_button]:border-destructive [&_button]:focus-visible:ring-destructive/30' : ''"
                             @update:model-value="retentionAgentId = $event"
                         />
                         <p class="text-muted-foreground text-xs">
-                            Which connected agent runs retention sweeps and integrity checks for this
-                            destination. It must be able to reach the repository.
+                            {{ t('destinationSheet.maintenanceAgentHelp') }}
                         </p>
                         <FieldError v-if="retentionAgentError">{{ retentionAgentError }}</FieldError>
                     </Field>
@@ -1123,9 +1113,9 @@ function onOpenChange(value: boolean) {
                         <Separator />
                         <div class="flex items-center justify-between">
                             <div>
-                                <p class="text-sm font-medium">Enabled</p>
+                                <p class="text-sm font-medium">{{ t('destinationSheet.enabled') }}</p>
                                 <p class="text-muted-foreground text-xs">
-                                    Disabled destinations are skipped by backups, snapshot sync and scheduled retention and checks.
+                                    {{ t('destinationSheet.enabledHelp') }}
                                 </p>
                             </div>
                             <Switch :model-value="enabled" @update:model-value="enabled = $event" />
@@ -1140,10 +1130,9 @@ function onOpenChange(value: boolean) {
                                 <div class="flex items-start gap-2.5">
                                     <Archive class="size-4 mt-0.5 shrink-0 text-muted-foreground" />
                                     <div>
-                                        <p class="text-sm font-medium leading-none">Import existing repository</p>
+                                        <p class="text-sm font-medium leading-none">{{ t('destinationSheet.importRepository') }}</p>
                                         <p class="text-muted-foreground text-xs mt-1.5">
-                                            Enable this if the destination already contains a Restic repository
-                                            whose snapshots you want to import.
+                                            {{ t('destinationSheet.importRepositoryHelp') }}
                                         </p>
                                     </div>
                                 </div>
@@ -1160,20 +1149,20 @@ function onOpenChange(value: boolean) {
                             >
                                 <div v-if="importEnabled" class="space-y-3 pt-1">
                                     <Field>
-                                        <FieldLabel for="import-agent">Agent</FieldLabel>
+                                        <FieldLabel for="import-agent">{{ t('destinationSheet.agent') }}</FieldLabel>
                                         <AsyncCombobox
                                             endpoint="/api/v1/agents"
                                             :model-value="importAgentId"
-                                            placeholder="Select an agent"
+                                            :placeholder="t('destinationSheet.selectAgent')"
                                             :class="importAgentError ? '[&_button]:border-destructive [&_button]:focus-visible:ring-destructive/30' : ''"
                                             @update:model-value="importAgentId = $event"
                                         />
                                         <FieldError v-if="importAgentError">{{ importAgentError }}</FieldError>
                                     </Field>
                                     <Field>
-                                        <FieldLabel for="import-password">Repository Password</FieldLabel>
+                                        <FieldLabel for="import-password">{{ t('destinationSheet.repoPassword') }}</FieldLabel>
                                         <Input id="import-password" v-model="importRepoPassword" type="password"
-                                            autocomplete="off" placeholder="Restic repository password"
+                                            autocomplete="off" :placeholder="t('destinationSheet.repoPasswordPlaceholder')"
                                             :class="importPasswordError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                                         <FieldError v-if="importPasswordError">{{ importPasswordError }}</FieldError>
                                     </Field>
@@ -1186,7 +1175,7 @@ function onOpenChange(value: boolean) {
                                         </p>
                                     </Transition>
                                     <p class="text-xs text-muted-foreground">
-                                        The connection will be tested on submit. If it fails, the destination will not be created.
+                                        {{ t('destinationSheet.importTestNote') }}
                                     </p>
                                 </div>
                             </Transition>
@@ -1195,11 +1184,11 @@ function onOpenChange(value: boolean) {
 
                     <SheetFooter class="mt-2 px-0">
                         <Button type="button" variant="outline" :disabled="submitting" @click="onOpenChange(false)">
-                            Cancel
+                            {{ t('destinationSheet.cancel') }}
                         </Button>
                         <Button type="submit" :disabled="submitting">
                             <Loader2 v-if="submitting" class="size-4 animate-spin" />
-                            {{ submitting ? (importEnabled ? 'Importing…' : 'Saving…') : (isEdit ? 'Save Changes' : (importEnabled ? 'Create & Import' : 'Create Destination')) }}
+                            {{ submitting ? (importEnabled ? t('destinationSheet.importing') : t('destinationSheet.saving')) : (isEdit ? t('destinationSheet.saveChanges') : (importEnabled ? t('destinationSheet.createAndImport') : t('destinationSheet.createDestination'))) }}
                         </Button>
                     </SheetFooter>
 

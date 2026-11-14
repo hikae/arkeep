@@ -3,6 +3,7 @@ import { createPinia } from 'pinia'
 import { registerSW } from 'virtual:pwa-register'
 import './style.css'
 import App from './App.vue'
+import { i18n } from './i18n'
 import { router } from './router'
 
 // Register the service worker and handle automatic updates.
@@ -34,4 +35,5 @@ const app = createApp(App)
 
 app.use(router)
 app.use(pinia)
+app.use(i18n)
 app.mount('#app')

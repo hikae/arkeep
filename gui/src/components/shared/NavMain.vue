@@ -9,6 +9,7 @@ import {
     SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { useRoute } from "vue-router";
+import { useI18n } from "vue-i18n";
 
 defineProps<{
     items: {
@@ -23,6 +24,7 @@ defineProps<{
 }>()
 
 const route = useRoute()
+const { t } = useI18n()
 
 // Returns true if the current route starts with the item's url.
 // startsWith instead of exact match so /agents/123 keeps Agents active.
@@ -34,14 +36,14 @@ function isActive(url: string): boolean {
 <template>
     <template v-for="item in items" :key="item.title">
         <SidebarGroup>
-            <SidebarGroupLabel>{{ item.title }}</SidebarGroupLabel>
+            <SidebarGroupLabel>{{ t(item.title) }}</SidebarGroupLabel>
             <SidebarGroupContent>
                 <SidebarMenu>
                     <SidebarMenuItem v-for="obj in item.items" :key="obj.url">
                         <SidebarMenuButton as-child :is-active="isActive(obj.url)">
                             <RouterLink :to="obj.url">
                                 <component :is="obj.icon" />
-                                <span>{{ obj.title }}</span>
+                                <span>{{ t(obj.title) }}</span>
                             </RouterLink>
                         </SidebarMenuButton>
                     </SidebarMenuItem>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import {
     Table,
@@ -51,6 +52,7 @@ interface SnapshotListResponse {
 // ---------------------------------------------------------------------------
 
 const authStore = useAuthStore()
+const { t, locale } = useI18n()
 
 const snapshots = ref<Snapshot[]>([])
 const total = ref(0)
@@ -94,7 +96,7 @@ function formatBytes(bytes: number): string {
 
 function formatDate(iso: string | null): string {
     if (!iso) return '—'
-    return new Date(iso).toLocaleString(undefined, {
+    return new Date(iso).toLocaleString(locale.value, {
         dateStyle: 'medium',
         timeStyle: 'short',
     })
@@ -121,7 +123,7 @@ async function fetchSnapshots() {
         snapshots.value = res.data.items
         total.value = res.data.total
     } catch (e: any) {
-        error.value = apiErrorMessage(e, 'Failed to load snapshots.')
+        error.value = apiErrorMessage(e, t('snapshots.loadFailed'))
     } finally {
         loading.value = false
     }
@@ -171,7 +173,7 @@ async function confirmDelete() {
         }
         await fetchSnapshots()
     } catch (e: any) {
-        error.value = apiErrorMessage(e, 'Failed to delete snapshot.')
+        error.value = apiErrorMessage(e, t('snapshots.deleteFailed'))
     } finally {
         deleteLoading.value = false
     }
@@ -211,7 +213,7 @@ async function syncSnapshots() {
                     `/api/v1/destinations/${id}/sync`, { method: 'POST' })
                 results.push(res.data)
             } catch (e: any) {
-                failures.push(apiErrorMessage(e, 'sync failed'))
+                failures.push(apiErrorMessage(e, t('snapshots.syncFailedItem')))
             }
         }
         if (results.length > 0) {
@@ -221,11 +223,15 @@ async function syncSnapshots() {
         if (failures.length > 0) {
             error.value = ids.length === 1
                 ? failures[0]
-                : `${failures.length} of ${ids.length} destinations could not be synced: ${failures.join('; ')}`
+                : t('snapshots.syncFailures', {
+                    failed: failures.length,
+                    total: ids.length,
+                    errors: failures.join('; '),
+                })
         }
         await fetchSnapshots()
     } catch (e: any) {
-        error.value = apiErrorMessage(e, 'Failed to sync snapshots.')
+        error.value = apiErrorMessage(e, t('snapshots.syncFailed'))
     } finally {
         syncLoading.value = false
     }
@@ -240,20 +246,20 @@ onMounted(fetchSnapshots)
         <!-- Page header -->
         <div class="flex items-center justify-between">
             <div>
-                <h1 class="text-2xl font-semibold tracking-tight">Snapshots</h1>
+                <h1 class="text-2xl font-semibold tracking-tight">{{ t('snapshots.title') }}</h1>
                 <p class="mt-1 text-sm text-muted-foreground">
-                    Point-in-time restore points created by completed backup jobs.
+                    {{ t('snapshots.subtitle') }}
                 </p>
             </div>
             <div class="flex items-center gap-2">
                 <Button v-if="authStore.isAdmin" variant="outline" size="sm" :disabled="syncLoading"
-                    :title="destinationFilter ? 'Re-read this destination\'s repository' : 'Re-read the repository of every enabled destination'"
+                    :title="destinationFilter ? t('snapshots.syncThisTitle') : t('snapshots.syncAllTitle')"
                     @click="syncSnapshots">
                     <Loader2 v-if="syncLoading" class="w-4 h-4 mr-1.5 animate-spin" />
                     <RefreshCcw v-else class="w-4 h-4 mr-1.5" />
-                    {{ destinationFilter ? 'Sync Destination' : 'Sync All' }}
+                    {{ destinationFilter ? t('snapshots.syncDestination') : t('snapshots.syncAll') }}
                 </Button>
-                <Button variant="outline" size="icon" aria-label="Refresh" :disabled="loading" @click="fetchSnapshots">
+                <Button variant="outline" size="icon" :aria-label="t('common.refresh')" :disabled="loading" @click="fetchSnapshots">
                     <RefreshCw class="w-4 h-4" :class="{ 'animate-spin': loading }" />
                 </Button>
             </div>
@@ -272,7 +278,7 @@ onMounted(fetchSnapshots)
             <AsyncCombobox
                 endpoint="/api/v1/policies"
                 :model-value="policyFilter"
-                placeholder="All policies"
+                :placeholder="t('snapshots.allPolicies')"
                 allow-clear
                 class="w-44"
                 @update:model-value="policyFilter = $event"
@@ -280,13 +286,13 @@ onMounted(fetchSnapshots)
             <AsyncCombobox
                 endpoint="/api/v1/destinations"
                 :model-value="destinationFilter"
-                placeholder="All destinations"
+                :placeholder="t('snapshots.allDestinations')"
                 allow-clear
                 class="w-48"
                 @update:model-value="destinationFilter = $event"
             />
             <span v-if="!loading" class="text-sm text-muted-foreground">
-                {{ total }} snapshot{{ total !== 1 ? 's' : '' }}
+                {{ t('snapshots.count', total, { named: { n: total } }) }}
             </span>
         </div>
 
@@ -295,11 +301,11 @@ onMounted(fetchSnapshots)
             <Table>
                 <TableHeader>
                     <TableRow>
-                        <TableHead>Policy</TableHead>
-                        <TableHead>Destination</TableHead>
-                        <TableHead>Snapshot ID</TableHead>
-                        <TableHead>Added</TableHead>
-                        <TableHead>Created</TableHead>
+                        <TableHead>{{ t('snapshots.colPolicy') }}</TableHead>
+                        <TableHead>{{ t('snapshots.colDestination') }}</TableHead>
+                        <TableHead>{{ t('snapshots.colSnapshotId') }}</TableHead>
+                        <TableHead>{{ t('snapshots.colAdded') }}</TableHead>
+                        <TableHead>{{ t('snapshots.colCreated') }}</TableHead>
                         <TableHead class="w-13" />
                     </TableRow>
                 </TableHeader>
@@ -324,9 +330,9 @@ onMounted(fetchSnapshots)
                                         <Camera class="w-10 h-10 text-muted-foreground" />
                                     </div>
                                     <div>
-                                        <p class="font-medium">No snapshots found</p>
+                                        <p class="font-medium">{{ t('snapshots.empty') }}</p>
                                         <p class="mt-1 text-sm text-muted-foreground">
-                                            Snapshots are created automatically when a backup job succeeds.
+                                            {{ t('snapshots.emptyDetail') }}
                                         </p>
                                     </div>
                                 </div>
@@ -342,14 +348,14 @@ onMounted(fetchSnapshots)
                                 <div class="flex items-center gap-2">
                                     <span>{{ snapshot.destination_name }}</span>
                                     <Badge v-if="snapshot.destination_deleted" variant="outline"
-                                        title="This destination was deleted and Arkeep erased its credentials. Restoring this snapshot requires entering them again.">
-                                        Deleted
+                                        :title="t('snapshots.deletedTitle')">
+                                        {{ t('snapshots.deleted') }}
                                     </Badge>
                                 </div>
                             </TableCell>
                             <TableCell>
                                 <span v-if="snapshot.destination_deleted" class="font-mono text-sm"
-                                    title="Browsing is not available because the destination was deleted. You can still restore the whole snapshot.">
+                                    :title="t('snapshots.browseUnavailableTitle')">
                                     {{ abbreviate(snapshot.restic_snapshot_id) }}
                                 </span>
                                 <span v-else-if="!authStore.isAdmin" class="font-mono text-sm">
@@ -357,7 +363,7 @@ onMounted(fetchSnapshots)
                                 </span>
                                 <RouterLink v-else :to="{ name: 'snapshot-browse', params: { id: snapshot.id } }"
                                     class="font-mono text-sm underline-offset-4 hover:underline"
-                                    :title="`Browse snapshot ${snapshot.restic_snapshot_id}`">
+                                    :title="t('snapshots.browseTitle', { id: snapshot.restic_snapshot_id })">
                                     {{ abbreviate(snapshot.restic_snapshot_id) }}
                                 </RouterLink>
                             </TableCell>
@@ -374,19 +380,19 @@ onMounted(fetchSnapshots)
                                     <DropdownMenuTrigger as-child>
                                         <Button variant="ghost" size="icon" class="w-8 h-8">
                                             <MoreHorizontal class="w-4 h-4" />
-                                            <span class="sr-only">Open actions</span>
+                                            <span class="sr-only">{{ t('snapshots.openActions') }}</span>
                                         </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end">
                                         <DropdownMenuItem @click="openRestoreSheet(snapshot)">
                                             <RotateCcw class="w-4 h-4 mr-2" />
-                                            Restore
+                                            {{ t('snapshots.restore') }}
                                         </DropdownMenuItem>
                                         <DropdownMenuSeparator />
                                         <DropdownMenuItem class="text-destructive focus:text-destructive"
                                             @click="openDeleteDialog(snapshot)">
                                             <Trash2 class="w-4 h-4 mr-2" />
-                                            Delete
+                                            {{ t('common.delete') }}
                                         </DropdownMenuItem>
                                     </DropdownMenuContent>
                                 </DropdownMenu>
@@ -401,15 +407,19 @@ onMounted(fetchSnapshots)
         <!-- Pagination -->
         <div v-if="!loading && totalPages > 1" class="flex items-center justify-between text-sm text-muted-foreground">
             <span>
-                Showing {{ offset + 1 }}–{{ Math.min(offset + pageSize, total) }} of {{ total }} snapshots
+                {{ t('snapshots.showing', {
+                    from: offset + 1,
+                    to: Math.min(offset + pageSize, total),
+                    total,
+                }) }}
             </span>
             <div class="flex items-center gap-2">
                 <Button variant="outline" size="sm" :disabled="page === 1" @click="goToPage(page - 1)">
-                    Previous
+                    {{ t('agents.previous') }}
                 </Button>
                 <span class="px-2">{{ page }} / {{ totalPages }}</span>
                 <Button variant="outline" size="sm" :disabled="page === totalPages" @click="goToPage(page + 1)">
-                    Next
+                    {{ t('agents.next') }}
                 </Button>
             </div>
         </div>
@@ -423,22 +433,18 @@ onMounted(fetchSnapshots)
     <AlertDialog :open="deleteDialogOpen" @update:open="deleteDialogOpen = $event">
         <AlertDialogContent>
             <AlertDialogHeader>
-                <AlertDialogTitle>Delete snapshot?</AlertDialogTitle>
+                <AlertDialogTitle>{{ t('snapshots.deleteTitle') }}</AlertDialogTitle>
                 <AlertDialogDescription>
                     <span v-if="snapshotToDelete">
-                        Snapshot
-                        <span class="font-mono">{{ abbreviate(snapshotToDelete.restic_snapshot_id) }}</span>
-                        will be removed from Arkeep's list. Its data stays in the repository, and the
-                        next snapshot sync adds it back as imported. To delete snapshots from the
-                        repository, use retention.
+                        {{ t('snapshots.deleteBody', { id: abbreviate(snapshotToDelete.restic_snapshot_id) }) }}
                     </span>
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-                <AlertDialogCancel :disabled="deleteLoading">Cancel</AlertDialogCancel>
+                <AlertDialogCancel :disabled="deleteLoading">{{ t('common.cancel') }}</AlertDialogCancel>
                 <AlertDialogAction variant="destructive"
                     :disabled="deleteLoading" @click="confirmDelete">
-                    {{ deleteLoading ? 'Deleting…' : 'Delete' }}
+                    {{ deleteLoading ? t('snapshots.deleting') : t('common.delete') }}
                 </AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>

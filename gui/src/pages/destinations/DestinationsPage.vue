@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import {
   Table,
   TableBody,
@@ -65,6 +66,7 @@ interface DestinationListResponse {
 
 const router = useRouter()
 const authStore = useAuthStore()
+const { t, te, locale } = useI18n()
 
 const destinations = ref<Destination[]>([])
 const total = ref(0)
@@ -117,14 +119,8 @@ function typeIcon(type: string) {
 }
 
 function typeLabel(type: string): string {
-  switch (type) {
-    case 'local': return 'Local'
-    case 's3': return 'S3'
-    case 'sftp': return 'SFTP'
-    case 'rest': return 'REST'
-    case 'rclone': return 'Rclone'
-    default: return type
-  }
+  const key = `destinations.type.${type}`
+  return te(key) ? t(key) : type
 }
 
 function formatBytes(bytes: number): string {
@@ -153,7 +149,7 @@ async function fetchDestinations() {
     destinations.value = res.data.items
     total.value = res.data.total
   } catch (e: any) {
-    error.value = apiErrorMessage(e, 'Failed to load destinations')
+    error.value = apiErrorMessage(e, t('destinations.loadFailed'))
   } finally {
     loading.value = false
   }
@@ -217,7 +213,7 @@ async function confirmDelete() {
     }
     await fetchDestinations()
   } catch (e: any) {
-    error.value = apiErrorMessage(e, 'Failed to delete destination')
+    error.value = apiErrorMessage(e, t('destinations.deleteFailed'))
   } finally {
     deleteLoading.value = false
   }
@@ -236,18 +232,18 @@ onMounted(fetchDestinations)
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div>
-        <h1 class="text-2xl font-semibold tracking-tight">Destinations</h1>
+        <h1 class="text-2xl font-semibold tracking-tight">{{ t('destinations.title') }}</h1>
         <p class="mt-1 text-sm text-muted-foreground">
-          Manage storage targets for your backups.
+          {{ t('destinations.subtitle') }}
         </p>
       </div>
       <div class="flex items-center gap-2">
-        <Button variant="outline" size="icon" aria-label="Refresh" :disabled="loading" @click="fetchDestinations">
+        <Button variant="outline" size="icon" :aria-label="t('common.refresh')" :disabled="loading" @click="fetchDestinations">
           <RefreshCw class="w-4 h-4" :class="{ 'animate-spin': loading }" />
         </Button>
         <Button v-if="authStore.isAdmin" @click="openCreate">
           <Plus class="w-4 h-4" />
-          New Destination
+          {{ t('destinations.newDestination') }}
         </Button>
       </div>
     </div>
@@ -263,8 +259,7 @@ onMounted(fetchDestinations)
          disabled rather than guessed. -->
     <Alert v-if="needsReviewCount > 0" variant="destructive">
       <AlertDescription>
-        {{ needsReviewCount }} destination{{ needsReviewCount === 1 ? '' : 's' }} need{{ needsReviewCount === 1 ? 's' : '' }}
-        retention reconfigured after the upgrade — open one below to review.
+        {{ t('destinations.needsReviewBanner', needsReviewCount, { named: { n: needsReviewCount } }) }}
       </AlertDescription>
     </Alert>
 
@@ -273,12 +268,12 @@ onMounted(fetchDestinations)
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Name</TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead>Status</TableHead>
-            <SortableTableHead label="Usage" :active="sortKey === 'usage'" :order="sortOrder"
+            <TableHead>{{ t('destinations.colName') }}</TableHead>
+            <TableHead>{{ t('destinations.colType') }}</TableHead>
+            <TableHead>{{ t('destinations.colStatus') }}</TableHead>
+            <SortableTableHead :label="t('destinations.colUsage')" :active="sortKey === 'usage'" :order="sortOrder"
               @toggle="toggleSort('usage', 'desc')" />
-            <TableHead>Created</TableHead>
+            <TableHead>{{ t('destinations.colCreated') }}</TableHead>
             <TableHead class="w-13" />
           </TableRow>
         </TableHeader>
@@ -302,14 +297,14 @@ onMounted(fetchDestinations)
                     <HardDrive class="w-8 h-8 text-muted-foreground" />
                   </div>
                   <div>
-                    <p class="font-medium">No destinations configured</p>
+                    <p class="font-medium">{{ t('destinations.empty') }}</p>
                     <p class="mt-1 text-sm text-muted-foreground">
-                      Create a destination to start storing your backups.
+                      {{ t('destinations.emptyDetail') }}
                     </p>
                   </div>
                   <Button v-if="authStore.isAdmin" size="sm" @click="openCreate">
                     <Plus class="w-4 h-4" />
-                    New Destination
+                    {{ t('destinations.newDestination') }}
                   </Button>
                 </div>
               </TableCell>
@@ -322,29 +317,29 @@ onMounted(fetchDestinations)
               class="cursor-pointer hover:bg-muted/50"
               tabindex="0"
               role="link"
-              :aria-label="`View destination ${dest.name}`"
+              :aria-label="t('destinations.viewDestination', { name: dest.name })"
               @click="router.push(`/destinations/${dest.id}`)"
               @keyup.enter="router.push(`/destinations/${dest.id}`)">
               <TableCell class="font-medium">
                 <div class="flex items-center gap-2">
                   {{ dest.name }}
                   <Badge v-if="dest.has_repo_password" variant="outline" class="text-xs font-normal">
-                    Existing repo
+                    {{ t('destinations.existingRepo') }}
                   </Badge>
                   <!-- Retention badges (issue #130) — priority: needs review
                        > append-only > no retention configured. -->
                   <Badge v-if="dest.retention_needs_review" variant="destructive" class="text-xs font-normal">
-                    Retention needs reconfiguration
+                    {{ t('destinations.retentionNeedsReview') }}
                   </Badge>
                   <Badge v-else-if="dest.append_only" variant="outline" class="text-xs font-normal">
-                    Append-only
+                    {{ t('destinations.appendOnly') }}
                   </Badge>
                   <Badge v-else-if="!dest.retention_enabled" variant="secondary" class="text-xs font-normal">
-                    No retention
+                    {{ t('destinations.noRetention') }}
                   </Badge>
                   <!-- Most recent integrity check failed (issue #307). -->
                   <Badge v-if="dest.last_check_status === 'failed'" variant="destructive" class="text-xs font-normal">
-                    Integrity check failed
+                    {{ t('destinations.integrityCheckFailed') }}
                   </Badge>
                 </div>
               </TableCell>
@@ -357,12 +352,15 @@ onMounted(fetchDestinations)
               <TableCell>
                 <div class="flex items-center gap-2">
                   <Badge :variant="dest.enabled ? 'default' : 'secondary'">
-                    {{ dest.enabled ? 'Enabled' : 'Disabled' }}
+                    {{ dest.enabled ? t('common.enabled') : t('common.disabled') }}
                   </Badge>
                   <!-- Destination locks: the jobs holding the repository; links
                        to the oldest one (issues #290, #319). -->
                   <RouterLink v-if="dest.locks.length" :to="{ name: 'job-detail', params: { id: dest.locks[0].job_id } }"
-                    :title="`In use since ${formatDate(dest.locks[0].since)}: ${lockExplanation(dest.locks)}.`"
+                    :title="t('destinations.inUseSince', {
+                      since: formatDate(dest.locks[0].since),
+                      explanation: lockExplanation(dest.locks),
+                    })"
                     @click.stop>
                     <Badge variant="outline" class="text-xs font-normal">{{ lockLabel(dest.locks) }}</Badge>
                   </RouterLink>
@@ -372,7 +370,7 @@ onMounted(fetchDestinations)
                 {{ formatBytes(dest.repo_size_bytes) }}
               </TableCell>
               <TableCell class="text-sm text-muted-foreground">
-                {{ new Date(dest.created_at).toLocaleDateString() }}
+                {{ new Date(dest.created_at).toLocaleDateString(locale) }}
               </TableCell>
 
               <!-- Actions dropdown -->
@@ -382,27 +380,27 @@ onMounted(fetchDestinations)
                   <DropdownMenuTrigger as-child>
                     <Button variant="ghost" size="icon" class="w-8 h-8">
                       <MoreHorizontal class="w-4 h-4" />
-                      <span class="sr-only">Open actions</span>
+                      <span class="sr-only">{{ t('destinations.openActions') }}</span>
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem @click="openEditSheet(dest)">
                       <PencilLine class="w-4 h-4 mr-2" />
-                      Edit
+                      {{ t('common.edit') }}
                     </DropdownMenuItem>
                     <DropdownMenuItem @click="openCloneSheet(dest)">
                       <Copy class="w-4 h-4 mr-2" />
-                      Duplicate
+                      {{ t('policies.duplicate') }}
                     </DropdownMenuItem>
                     <DropdownMenuItem @click="openImportDialog(dest)">
                       <Archive class="w-4 h-4 mr-2" />
-                      Import snapshots
+                      {{ t('destinations.importSnapshots') }}
                     </DropdownMenuItem>
                     <DropdownMenuSeparator v-if="authStore.isAdmin" />
                     <DropdownMenuItem v-if="authStore.isAdmin" class="text-destructive focus:text-destructive"
                       @click="openDeleteDialog(dest)">
                       <Trash2 class="w-4 h-4 mr-2" />
-                      Delete
+                      {{ t('common.delete') }}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -416,15 +414,19 @@ onMounted(fetchDestinations)
     <!-- Pagination -->
     <div v-if="!loading && totalPages > 1" class="flex items-center justify-between text-sm text-muted-foreground">
       <span>
-        Showing {{ offset + 1 }}–{{ Math.min(offset + pageSize, total) }} of {{ total }} destinations
+        {{ t('destinations.showing', {
+          from: offset + 1,
+          to: Math.min(offset + pageSize, total),
+          total,
+        }) }}
       </span>
       <div class="flex items-center gap-2">
         <Button variant="outline" size="sm" :disabled="page === 1" @click="goToPage(page - 1)">
-          Previous
+          {{ t('agents.previous') }}
         </Button>
         <span class="px-2">{{ page }} / {{ totalPages }}</span>
         <Button variant="outline" size="sm" :disabled="page === totalPages" @click="goToPage(page + 1)">
-          Next
+          {{ t('agents.next') }}
         </Button>
       </div>
     </div>
@@ -443,22 +445,18 @@ onMounted(fetchDestinations)
   <AlertDialog :open="deleteDialogOpen" @update:open="deleteDialogOpen = $event">
     <AlertDialogContent>
       <AlertDialogHeader>
-        <AlertDialogTitle>Delete destination?</AlertDialogTitle>
+        <AlertDialogTitle>{{ t('destinations.deleteTitle') }}</AlertDialogTitle>
         <AlertDialogDescription>
           <span v-if="destinationToDelete">
-            <strong>{{ destinationToDelete.name }}</strong> will be deleted and its stored credentials erased.
-            Its existing snapshots stay listed, but restoring one will require entering
-            the destination's credentials again; browsing and downloading them will no longer be possible.
-            The backup data on the storage is not touched.
-            This action cannot be undone.
+            {{ t('destinations.deleteBody', { name: destinationToDelete.name }) }}
           </span>
         </AlertDialogDescription>
       </AlertDialogHeader>
       <AlertDialogFooter>
-        <AlertDialogCancel :disabled="deleteLoading">Cancel</AlertDialogCancel>
+        <AlertDialogCancel :disabled="deleteLoading">{{ t('common.cancel') }}</AlertDialogCancel>
         <AlertDialogAction class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
           :disabled="deleteLoading" @click="confirmDelete">
-          {{ deleteLoading ? 'Deleting…' : 'Delete' }}
+          {{ deleteLoading ? t('destinations.deleting') : t('common.delete') }}
         </AlertDialogAction>
       </AlertDialogFooter>
     </AlertDialogContent>
