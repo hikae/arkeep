@@ -6,10 +6,12 @@
 
 import { useColorMode, usePreferredColorScheme } from '@vueuse/core'
 import { computed, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 type ColorModeValue = 'dark' | 'light'
 
 export function useTheme() {
+  const { t } = useI18n()
   const mode = useColorMode({
     // Persisted in localStorage under this key
     storageKey: 'arkeep:color-mode',
@@ -41,8 +43,8 @@ export function useTheme() {
   }
 
   const modeLabel = computed(() => {
-    if (mode.value === 'dark') return 'Light Theme'
-    return 'Dark Theme'
+    if (mode.value === 'dark') return t('theme.switchToLight')
+    return t('theme.switchToDark')
   })
 
   return { mode, isDark, cycle, modeLabel }

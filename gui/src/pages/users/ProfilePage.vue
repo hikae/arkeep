@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useForm, useField } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
 import { z } from 'zod'
@@ -21,6 +22,7 @@ import type { ApiResponse, User } from '@/types'
 // ---------------------------------------------------------------------------
 
 const auth = useAuthStore()
+const { t } = useI18n()
 
 const userInitials = computed(() =>
     (auth.user?.display_name ?? '')
@@ -42,7 +44,7 @@ const isOIDC = computed(() => auth.user?.is_oidc ?? false)
 // useField would otherwise attach to the last form created in the component.
 const profileForm = useForm({
     validationSchema: toTypedSchema(z.object({
-        display_name: z.string().min(1, 'Display name is required'),
+        display_name: z.string().min(1, { error: () => t('profile.validation.displayNameRequired') }),
     })),
     initialValues: { display_name: auth.user?.display_name ?? '' },
 })
@@ -68,7 +70,7 @@ const submitProfile = profileForm.handleSubmit(async (values) => {
         profileSuccess.value = true
         setTimeout(() => { profileSuccess.value = false }, 3000)
     } catch (e: any) {
-        profileError.value = apiErrorMessage(e, 'Failed to update profile.')
+        profileError.value = apiErrorMessage(e, t('profile.profileUpdateFailed'))
     }
 })
 
@@ -78,11 +80,11 @@ const submitProfile = profileForm.handleSubmit(async (values) => {
 
 const passwordForm = useForm({
     validationSchema: toTypedSchema(z.object({
-        current_password: z.string().min(1, 'Current password is required'),
-        new_password: passwordSchema,
+        current_password: z.string().min(1, { error: () => t('profile.validation.currentPasswordRequired') }),
+        new_password: passwordSchema(),
         confirm_password: z.string(),
     }).refine((d) => d.new_password === d.confirm_password, {
-        message: 'Passwords do not match',
+        message: t('validation.passwordsDoNotMatch'),
         path: ['confirm_password'],
     })),
     initialValues: { current_password: '', new_password: '', confirm_password: '' },
@@ -114,7 +116,7 @@ const submitPassword = passwordForm.handleSubmit(async (values) => {
         passwordSuccess.value = true
         setTimeout(() => { passwordSuccess.value = false }, 3000)
     } catch (e: any) {
-        passwordError.value = apiErrorMessage(e, 'Failed to update password.')
+        passwordError.value = apiErrorMessage(e, t('profile.passwordUpdateFailed'))
     }
 })
 </script>
@@ -142,9 +144,9 @@ const submitPassword = passwordForm.handleSubmit(async (values) => {
         <!-- ── Display Name section ──────────────────────────────────────────── -->
         <div class="grid grid-cols-[280px_1fr] gap-12 py-8 border-b">
             <div>
-                <h2 class="text-sm font-semibold">Display Name</h2>
+                <h2 class="text-sm font-semibold">{{ t('profile.displayNameSection') }}</h2>
                 <p class="mt-1 text-sm text-muted-foreground">
-                    This name is shown in the sidebar, notifications, and anywhere your account is referenced.
+                    {{ t('profile.displayNameHelp') }}
                 </p>
             </div>
 
@@ -165,13 +167,13 @@ const submitPassword = passwordForm.handleSubmit(async (values) => {
                         leave-to-class="-translate-y-1 opacity-0">
                         <Alert v-if="profileSuccess"
                             class="border-emerald-500/30 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400">
-                            <AlertDescription>Display name updated successfully.</AlertDescription>
+                            <AlertDescription>{{ t('profile.displayNameUpdated') }}</AlertDescription>
                         </Alert>
                     </Transition>
 
                     <Field>
-                        <FieldLabel for="display-name">Display Name</FieldLabel>
-                        <Input id="display-name" v-model="fieldDisplayName" placeholder="Jane Doe" autocomplete="off"
+                        <FieldLabel for="display-name">{{ t('profile.displayNameLabel') }}</FieldLabel>
+                        <Input id="display-name" v-model="fieldDisplayName" :placeholder="t('profile.displayNamePlaceholder')" autocomplete="off"
                             :class="displayNameError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                         <FieldError v-if="displayNameError">{{ displayNameError }}</FieldError>
                     </Field>
@@ -179,7 +181,7 @@ const submitPassword = passwordForm.handleSubmit(async (values) => {
                     <div class="flex justify-end">
                         <Button type="submit" :disabled="profileSubmitting">
                             <Loader2 v-if="profileSubmitting" class="size-4 animate-spin" />
-                            {{ profileSubmitting ? 'Saving…' : 'Save Name' }}
+                            {{ profileSubmitting ? t('profile.saving') : t('profile.saveName') }}
                         </Button>
                     </div>
 
@@ -190,21 +192,20 @@ const submitPassword = passwordForm.handleSubmit(async (values) => {
         <!-- ── Password section ─────────────────────────────────────────────── -->
         <div class="grid grid-cols-[280px_1fr] gap-12 py-8 border-b">
             <div>
-                <h2 class="text-sm font-semibold">Password</h2>
+                <h2 class="text-sm font-semibold">{{ t('profile.passwordSection') }}</h2>
                 <p class="mt-1 text-sm text-muted-foreground">
                     <template v-if="isOIDC">
-                        Your account is managed by an external identity provider.
-                        Password changes must be made there.
+                        {{ t('profile.oidcHelp') }}
                     </template>
                     <template v-else>
-                        Choose a strong password of at least 8 characters. Your other sessions will be signed out.
+                        {{ t('profile.localHelp') }}
                     </template>
                 </p>
             </div>
 
             <div v-if="isOIDC"
                 class="flex items-center justify-center rounded-lg border border-dashed p-8 text-sm text-muted-foreground">
-                Password is managed by your identity provider.
+                {{ t('profile.oidcManaged') }}
             </div>
 
             <form v-else novalidate @submit="submitPassword">
@@ -224,12 +225,12 @@ const submitPassword = passwordForm.handleSubmit(async (values) => {
                         leave-to-class="-translate-y-1 opacity-0">
                         <Alert v-if="passwordSuccess"
                             class="border-emerald-500/30 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400">
-                            <AlertDescription>Password updated successfully.</AlertDescription>
+                            <AlertDescription>{{ t('profile.passwordUpdated') }}</AlertDescription>
                         </Alert>
                     </Transition>
 
                     <Field>
-                        <FieldLabel for="current-password">Current Password</FieldLabel>
+                        <FieldLabel for="current-password">{{ t('profile.currentPassword') }}</FieldLabel>
                         <Input id="current-password" v-model="fieldCurrentPassword" type="password"
                             autocomplete="current-password"
                             :class="currentPasswordError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
@@ -238,14 +239,14 @@ const submitPassword = passwordForm.handleSubmit(async (values) => {
 
                     <div class="grid grid-cols-2 gap-3">
                         <Field>
-                            <FieldLabel for="new-password">New Password</FieldLabel>
+                            <FieldLabel for="new-password">{{ t('profile.newPassword') }}</FieldLabel>
                             <Input id="new-password" v-model="fieldNewPassword" type="password"
                                 autocomplete="new-password"
                                 :class="newPasswordError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                             <FieldError v-if="newPasswordError">{{ newPasswordError }}</FieldError>
                         </Field>
                         <Field>
-                            <FieldLabel for="confirm-password">Confirm Password</FieldLabel>
+                            <FieldLabel for="confirm-password">{{ t('profile.confirmPassword') }}</FieldLabel>
                             <Input id="confirm-password" v-model="fieldConfirmPassword" type="password"
                                 autocomplete="new-password"
                                 :class="confirmPasswordError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
@@ -256,7 +257,7 @@ const submitPassword = passwordForm.handleSubmit(async (values) => {
                     <div class="flex justify-end">
                         <Button type="submit" :disabled="passwordSubmitting">
                             <Loader2 v-if="passwordSubmitting" class="size-4 animate-spin" />
-                            {{ passwordSubmitting ? 'Saving…' : 'Update Password' }}
+                            {{ passwordSubmitting ? t('profile.saving') : t('profile.updatePassword') }}
                         </Button>
                     </div>
 

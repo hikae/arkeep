@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
     Sheet,
     SheetContent,
@@ -18,6 +19,8 @@ const props = defineProps<{
     open: boolean
     snapshot: Snapshot | null
 }>()
+
+const { t } = useI18n()
 
 const emit = defineEmits<{
     'update:open': [value: boolean]
@@ -50,41 +53,41 @@ const sections = computed<Section[]>(() => {
     if (!s) return []
     const sum = s.summary
     const out: Section[] = [{
-        title: 'Snapshot',
+        title: t('snapshotDetails.sections.snapshot'),
         rows: [
-            { label: 'Snapshot ID', value: s.restic_snapshot_id, mono: true },
-            { label: 'Policy', value: s.policy_name || '—' },
-            { label: 'Destination', value: s.destination_name || '—' },
-            { label: 'Created', value: formatDate(s.created_at) },
+            { label: t('snapshotDetails.rows.snapshotId'), value: s.restic_snapshot_id, mono: true },
+            { label: t('snapshotDetails.rows.policy'), value: s.policy_name || '—' },
+            { label: t('snapshotDetails.rows.destination'), value: s.destination_name || '—' },
+            { label: t('snapshotDetails.rows.created'), value: formatDate(s.created_at) },
         ],
     }]
     if (sum) {
         out.push({
-            title: 'Backup',
+            title: t('snapshotDetails.sections.backup'),
             rows: [
-                { label: 'Started', value: formatDate(sum.backup_start) },
-                { label: 'Duration', value: formatDuration(sum.backup_start, sum.backup_end) },
+                { label: t('snapshotDetails.rows.started'), value: formatDate(sum.backup_start) },
+                { label: t('snapshotDetails.rows.duration'), value: formatDuration(sum.backup_start, sum.backup_end) },
             ],
         })
     }
     out.push({
-        title: 'Data',
+        title: t('snapshotDetails.sections.data'),
         rows: [
             ...(sum ? [
-                { label: 'Processed', value: formatBytes(sum.total_bytes_processed) },
-                { label: 'Added', value: formatBytes(sum.data_added) },
+                { label: t('snapshotDetails.rows.processed'), value: formatBytes(sum.total_bytes_processed) },
+                { label: t('snapshotDetails.rows.added'), value: formatBytes(sum.data_added) },
             ] : []),
-            { label: 'Stored (compressed)', value: formatBytes(s.size_bytes) },
+            { label: t('snapshotDetails.rows.stored'), value: formatBytes(s.size_bytes) },
         ],
     })
     if (sum) {
         out.push({
-            title: 'Files',
+            title: t('snapshotDetails.sections.files'),
             rows: [
-                { label: 'Processed', value: count(sum.total_files_processed) },
-                { label: 'New', value: count(sum.files_new) },
-                { label: 'Changed', value: count(sum.files_changed) },
-                { label: 'Unmodified', value: count(sum.files_unmodified) },
+                { label: t('snapshotDetails.rows.processed'), value: count(sum.total_files_processed) },
+                { label: t('snapshotDetails.rows.new'), value: count(sum.files_new) },
+                { label: t('snapshotDetails.rows.changed'), value: count(sum.files_changed) },
+                { label: t('snapshotDetails.rows.unmodified'), value: count(sum.files_unmodified) },
             ],
         })
     }
@@ -96,19 +99,17 @@ const sections = computed<Section[]>(() => {
     <Sheet :open="props.open" @update:open="emit('update:open', $event)">
         <SheetContent class="sm:max-w-md flex flex-col">
             <SheetHeader>
-                <SheetTitle>Snapshot details</SheetTitle>
+                <SheetTitle>{{ t('snapshotDetails.title') }}</SheetTitle>
                 <SheetDescription>
                     <span class="font-mono">{{ snapshot?.restic_snapshot_id?.slice(0, 8) }}</span>
-                    as recorded by restic when the backup ran.
+                    {{ t('snapshotDetails.subtitleSuffix') }}
                 </SheetDescription>
             </SheetHeader>
 
             <div class="flex flex-col gap-6 px-4 pb-6 flex-1 overflow-y-auto">
                 <p v-if="snapshot && !snapshot.summary" data-testid="no-summary"
                     class="text-sm text-muted-foreground">
-                    No backup details are recorded for this snapshot yet: the next snapshot sync of its
-                    destination reads them from the repository. Snapshots made with restic older than 0.17
-                    have none.
+                    {{ t('snapshotDetails.noSummary') }}
                 </p>
 
                 <section v-for="section in sections" :key="section.title">

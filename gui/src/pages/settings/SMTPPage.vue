@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useForm, useField } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
 import { z } from 'zod'
@@ -26,19 +27,20 @@ import type { ApiResponse, SMTPSettings } from '@/types'
 // ---------------------------------------------------------------------------
 
 const loading = ref(false)
+const { t } = useI18n()
 const smtpExists = ref(false)
 const submitError = ref<string | null>(null)
 const success = ref(false)
 
 const schema = toTypedSchema(
     z.object({
-        host: z.string().min(1, 'Host is required'),
+        host: z.string().min(1, { error: () => t('settingsSmtp.hostRequired') }),
         port: integerInRange(1, 65535),
         tls: z.boolean(),
         auth_enabled: z.boolean(),
         username: z.string(),
         password: z.string(),
-        from: z.email('Must be a valid email address'),
+        from: z.email({ error: () => t('settingsSmtp.emailInvalid') }),
         from_name: z.string(),
         recipients: z.array(z.string()),
         // The address being typed in the recipients input: checked when it is
@@ -96,11 +98,11 @@ function addRecipient() {
     const email = recipientInput.value.trim()
     if (!email) return
     if (!z.email().safeParse(email).success) {
-        setRecipientError('Invalid email address')
+        setRecipientError(t('settingsSmtp.invalidEmail'))
         return
     }
     if (smtpRecipients.value.includes(email)) {
-        setRecipientError('Already in the list')
+        setRecipientError(t('settingsSmtp.alreadyInList'))
         return
     }
     smtpRecipients.value = [...smtpRecipients.value, email]
@@ -196,7 +198,7 @@ const submit = handleSubmit(async (values) => {
         success.value = true
         setTimeout(() => { success.value = false }, 3000)
     } catch (e: any) {
-        submitError.value = apiErrorMessage(e, 'Failed to save SMTP settings')
+        submitError.value = apiErrorMessage(e, t('settingsSmtp.saveFailed'))
     }
 })
 
@@ -221,11 +223,11 @@ const sendTest = handleSubmit(async (values) => {
         })
         testResult.value = {
             ok: true,
-            message: `Test email sent to ${res.data.sent_to}.`,
+            message: t('settingsSmtp.testSent', { email: res.data.sent_to }),
             unsaved: JSON.stringify(requestBody(values)) !== savedBody,
         }
     } catch (e: any) {
-        testResult.value = { ok: false, message: apiErrorMessage(e, 'Failed to send the test email') }
+        testResult.value = { ok: false, message: apiErrorMessage(e, t('settingsSmtp.sendFailed')) }
     } finally {
         testing.value = false
     }
@@ -242,15 +244,15 @@ function discard() {
     <!-- Section header -->
     <div class="flex items-start justify-between gap-4 mb-6">
         <div>
-            <h2 class="text-base font-semibold">SMTP</h2>
+            <h2 class="text-base font-semibold">{{ t('settingsSmtp.title') }}</h2>
             <p class="mt-1 text-sm text-muted-foreground">
-                Configure an outbound mail server to deliver backup and agent notifications by email.
+                {{ t('settingsSmtp.description') }}
             </p>
             <p v-if="!loading && !smtpExists" class="mt-2 text-xs text-amber-600 dark:text-amber-400">
-                No SMTP server configured yet. Email notifications are disabled.
+                {{ t('settingsSmtp.notConfigured') }}
             </p>
         </div>
-        <Button variant="outline" size="icon" aria-label="Refresh" :disabled="loading" @click="fetchSMTP">
+        <Button variant="outline" size="icon" :aria-label="t('common.refresh')" :disabled="loading" @click="fetchSMTP">
             <RefreshCw class="size-4" :class="{ 'animate-spin': loading }" />
         </Button>
     </div>
@@ -273,7 +275,7 @@ function discard() {
                 leave-active-class="transition-all duration-150" leave-to-class="-translate-y-1 opacity-0">
                 <Alert v-if="success"
                     class="border-emerald-500/30 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400">
-                    <AlertDescription>SMTP settings saved successfully.</AlertDescription>
+                    <AlertDescription>{{ t('settingsSmtp.saved') }}</AlertDescription>
                 </Alert>
             </Transition>
 
@@ -284,25 +286,22 @@ function discard() {
             <Alert v-if="testResult?.unsaved" data-testid="smtp-test-unsaved"
                 class="border-amber-500/30 bg-amber-500/5 text-amber-600 dark:text-amber-400">
                 <AlertCircle class="size-4" />
-                <AlertDescription>
-                    These settings are not saved yet: notifications and password reset emails
-                    still use the saved ones. Click Save to apply them.
-                </AlertDescription>
+<AlertDescription>{{ t('settingsSmtp.unsavedWarning') }}</AlertDescription>
             </Alert>
 
             <!-- ── Connection ──────────────────────────────────────────────── -->
             <div class="flex flex-col gap-4">
-                <p class="text-sm font-medium">Connection</p>
+                <p class="text-sm font-medium">{{ t('settingsSmtp.connection') }}</p>
 
                 <div class="grid grid-cols-3 gap-3">
                     <Field class="col-span-2">
-                        <FieldLabel for="smtp-host">Host</FieldLabel>
+                        <FieldLabel for="smtp-host">{{ t('settingsSmtp.host') }}</FieldLabel>
                         <Input id="smtp-host" v-model="smtpHost" placeholder="smtp.example.com" autocomplete="off"
                             :class="hostError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                         <FieldError v-if="hostError">{{ hostError }}</FieldError>
                     </Field>
                     <Field>
-                        <FieldLabel for="smtp-port">Port</FieldLabel>
+                        <FieldLabel for="smtp-port">{{ t('settingsSmtp.port') }}</FieldLabel>
                         <Input id="smtp-port" v-model="smtpPort" type="number" placeholder="587"
                             :class="portError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                         <FieldError v-if="portError">{{ portError }}</FieldError>
@@ -311,9 +310,9 @@ function discard() {
 
                 <div class="flex items-center justify-between rounded-lg border px-4 py-3">
                     <div>
-                        <p class="text-sm font-medium">Implicit TLS</p>
+                        <p class="text-sm font-medium">{{ t('settingsSmtp.tls') }}</p>
                         <p class="text-xs text-muted-foreground">
-                            Enable for SMTPS on port 465. Leave off for STARTTLS (587) or plaintext.
+                            {{ t('settingsSmtp.tlsHelp') }}
                         </p>
                     </div>
                     <Switch :model-value="smtpTLS" @update:model-value="smtpTLS = $event" />
@@ -326,9 +325,9 @@ function discard() {
             <div class="flex flex-col gap-4">
                 <div class="flex items-center justify-between rounded-lg border px-4 py-3">
                     <div>
-                        <p class="text-sm font-medium">Authentication</p>
+                        <p class="text-sm font-medium">{{ t('settingsSmtp.authentication') }}</p>
                         <p class="text-xs text-muted-foreground">
-                            Enable if your SMTP server requires credentials.
+                            {{ t('settingsSmtp.authHelp') }}
                         </p>
                     </div>
                     <Switch :model-value="smtpAuthEnabled" @update:model-value="smtpAuthEnabled = $event" />
@@ -339,16 +338,16 @@ function discard() {
                     leave-to-class="opacity-0 -translate-y-1">
                     <div v-if="smtpAuthEnabled" class="grid grid-cols-2 gap-3">
                         <Field>
-                            <FieldLabel for="smtp-username">Username</FieldLabel>
+                            <FieldLabel for="smtp-username">{{ t('settingsSmtp.username') }}</FieldLabel>
                             <Input id="smtp-username" v-model="smtpUsername" autocomplete="off" />
                         </Field>
                         <Field>
                             <FieldLabel for="smtp-password">
-                                Password
-                                <span v-if="smtpExists" class="text-muted-foreground font-normal">(optional)</span>
+                                {{ t('settingsSmtp.password') }}
+                                <span v-if="smtpExists" class="text-muted-foreground font-normal">{{ t('common.optional') }}</span>
                             </FieldLabel>
                             <Input id="smtp-password" v-model="smtpPassword" type="password"
-                                :placeholder="smtpExists ? '(unchanged)' : ''" autocomplete="new-password" />
+                                :placeholder="smtpExists ? t('settingsSmtp.unchanged') : ''" autocomplete="new-password" />
                         </Field>
                     </div>
                 </Transition>
@@ -358,19 +357,19 @@ function discard() {
 
             <!-- ── From address ────────────────────────────────────────────── -->
             <Field>
-                <FieldLabel for="smtp-from">From Address</FieldLabel>
+                <FieldLabel for="smtp-from">{{ t('settingsSmtp.fromAddress') }}</FieldLabel>
                 <Input id="smtp-from" v-model="smtpFrom" placeholder="arkeep@example.com" autocomplete="off"
                     :class="fromError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
-                <p class="text-xs text-muted-foreground">The sender address shown in notification emails.</p>
+                <p class="text-xs text-muted-foreground">{{ t('settingsSmtp.fromHelp') }}</p>
                 <FieldError v-if="fromError">{{ fromError }}</FieldError>
             </Field>
 
             <!-- ── From name ───────────────────────────────────────────────── -->
             <Field>
-                <FieldLabel for="smtp-from-name">From Name</FieldLabel>
-                <Input id="smtp-from-name" v-model="smtpFromName" placeholder="Arkeep" autocomplete="off" />
+                <FieldLabel for="smtp-from-name">{{ t('settingsSmtp.fromName') }}</FieldLabel>
+                <Input id="smtp-from-name" v-model="smtpFromName" :placeholder="t('settingsSmtp.fromNamePlaceholder')" autocomplete="off" />
                 <p class="text-xs text-muted-foreground">
-                    Display name shown next to the sender address. Defaults to "Arkeep" if left empty.
+                    {{ t('settingsSmtp.fromNameHelp') }}
                 </p>
             </Field>
 
@@ -379,10 +378,9 @@ function discard() {
             <!-- ── Notification recipients ─────────────────────────────────── -->
             <div class="flex flex-col gap-3">
                 <div>
-                    <p class="text-sm font-medium">Notification Recipients</p>
+                    <p class="text-sm font-medium">{{ t('settingsSmtp.recipients') }}</p>
                     <p class="text-xs text-muted-foreground mt-0.5">
-                        Email addresses that receive backup and agent notifications.
-                        When empty, all active admin accounts are notified.
+                        {{ t('settingsSmtp.recipientsHelp') }}
                     </p>
                 </div>
 
@@ -391,7 +389,7 @@ function discard() {
                     <span v-for="email in smtpRecipients" :key="email"
                         class="inline-flex items-center gap-1 rounded-full border bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground">
                         {{ email }}
-                        <button type="button" :aria-label="`Remove ${email}`"
+                        <button type="button" :aria-label="t('settingsSmtp.removeRecipient', { email })"
                             class="ml-0.5 rounded-full text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                             @click="removeRecipient(email)">
                             <X class="size-3" />
@@ -408,7 +406,7 @@ function discard() {
                             @keydown.enter.prevent="addRecipient" />
                         <FieldError v-if="recipientError" class="mt-1">{{ recipientError }}</FieldError>
                     </div>
-                    <Button type="button" variant="outline" @click="addRecipient">Add</Button>
+                    <Button type="button" variant="outline" @click="addRecipient">{{ t('settingsSmtp.add') }}</Button>
                 </div>
             </div>
 
@@ -417,7 +415,7 @@ function discard() {
                 <Button type="button" variant="outline" :disabled="isSubmitting || testing" @click="sendTest">
                     <Loader2 v-if="testing" class="size-4 animate-spin" />
                     <Send v-else class="size-4" />
-                    {{ testing ? 'Sending…' : 'Send test email' }}
+                    {{ testing ? t('settingsSmtp.sending') : t('settingsSmtp.sendTest') }}
                 </Button>
             </div>
 

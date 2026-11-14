@@ -38,6 +38,8 @@ import {
     ClipboardList,
 } from '@lucide/vue'
 import { api, apiErrorMessage } from '@/services/api'
+import { useI18n } from 'vue-i18n'
+import { statusLabel as jobStatusLabel } from '@/lib/jobUtils'
 import { wsClient } from '@/services/websocket'
 import type { Agent, AgentStatus, Job, ApiResponse } from '@/types'
 import AgentSheet from '@/components/agents/AgentSheet.vue'
@@ -60,6 +62,7 @@ defineOptions({ inheritAttrs: false })
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const { t, locale } = useI18n()
 const agentId = route.params.id as string
 
 // ---------------------------------------------------------------------------
@@ -105,7 +108,7 @@ const hasMetrics = computed(() => metricsHistory.value.length > 0)
 const chartData = computed(() =>
     [...metricsHistory.value].reverse().map((p, i) => ({
         ...p,
-        _label: `${i * 30}s ago`,
+        _label: t('agentDetail.secondsAgo', { n: i * 30 }),
     }))
 )
 
@@ -142,7 +145,7 @@ async function fetchAgent() {
         const res = await api<ApiResponse<Agent>>(`/api/v1/agents/${agentId}`)
         agent.value = res.data
     } catch (e: any) {
-        error.value = apiErrorMessage(e, 'Failed to load agent')
+        error.value = apiErrorMessage(e, t('agentDetail.loadFailed'))
     } finally {
         loading.value = false
     }
@@ -203,7 +206,7 @@ async function confirmResetIdentity() {
         await api(`/api/v1/agents/${agentId}/reset-identity`, { method: 'POST' })
         await fetchAgent()
     } catch (e: any) {
-        error.value = apiErrorMessage(e, 'Failed to reset agent identity')
+        error.value = apiErrorMessage(e, t('agentDetail.resetFailed'))
     } finally {
         resetIdentityLoading.value = false
         resetIdentityDialogOpen.value = false
@@ -230,15 +233,24 @@ function statusClass(status: AgentStatus): string {
     }
 }
 
+function agentStatusLabel(status: AgentStatus): string {
+    switch (status) {
+        case 'online': return t('agents.status.online')
+        case 'offline': return t('agents.status.offline')
+        case 'unknown': return t('agents.status.unknown')
+        default: return status
+    }
+}
+
 function formatLastSeen(lastSeenAt: string | null): string {
     if (!lastSeenAt) return '—'
     const date = new Date(lastSeenAt)
     if (isNaN(date.getTime())) return '—'
     const diff = Math.floor((Date.now() - date.getTime()) / 1000)
-    if (diff < 60) return `${diff}s ago`
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-    return date.toLocaleDateString()
+    if (diff < 60) return t('agents.lastSeenSeconds', { n: diff })
+    if (diff < 3600) return t('agents.lastSeenMinutes', { n: Math.floor(diff / 60) })
+    if (diff < 86400) return t('agents.lastSeenHours', { n: Math.floor(diff / 3600) })
+    return date.toLocaleDateString(locale.value)
 }
 
 function jobStatusVariant(status: string): 'default' | 'secondary' | 'outline' | 'destructive' {
@@ -264,7 +276,7 @@ function jobStatusClass(status: string): string {
 
 function formatDate(date: string | null): string {
     if (!date) return '—'
-    return new Date(date).toLocaleString()
+    return new Date(date).toLocaleString(locale.value)
 }
 
 // ---------------------------------------------------------------------------
@@ -272,9 +284,9 @@ function formatDate(date: string | null): string {
 // ---------------------------------------------------------------------------
 
 const metricsChartConfig = {
-    cpu: { label: 'CPU', color: 'var(--chart-2)' }, // teal
-    mem: { label: 'Memory', color: 'var(--chart-3)' }, // warm yellow
-    disk: { label: 'Disk', color: 'var(--chart-4)' }, // violet
+    cpu: { label: t('agentDetail.cpu'), color: 'var(--chart-2)' }, // teal
+    mem: { label: t('agentDetail.memory'), color: 'var(--chart-3)' }, // warm yellow
+    disk: { label: t('agentDetail.disk'), color: 'var(--chart-4)' }, // violet
 } satisfies ChartConfig
 
 // componentToString must be called during setup (it calls useId internally).
@@ -313,7 +325,7 @@ onUnmounted(() => {
         <!-- Back + Header -->
         <div class="flex items-start justify-between gap-4">
             <div class="flex items-center gap-3">
-                <Button variant="ghost" size="icon" aria-label="Back to agents" @click="router.push('/agents')">
+                <Button variant="ghost" size="icon" :aria-label="t('agentDetail.backToAgents')" @click="router.push('/agents')">
                     <ArrowLeft class="w-4 h-4" />
                 </Button>
                 <div>
@@ -331,7 +343,7 @@ onUnmounted(() => {
                                     'bg-muted-foreground': mergedAgent.status === 'offline',
                                     'bg-yellow-400': mergedAgent.status === 'unknown',
                                 }" />
-                                {{ mergedAgent.status.charAt(0).toUpperCase() + mergedAgent.status.slice(1) }}
+                                {{ agentStatusLabel(mergedAgent.status) }}
                             </Badge>
                         </div>
                         <p class="mt-0.5 text-sm font-mono text-muted-foreground">
@@ -343,23 +355,23 @@ onUnmounted(() => {
 
             <!-- Actions -->
             <div v-if="!loading && mergedAgent" class="flex items-center gap-2">
-                <Button variant="outline" size="icon" aria-label="Refresh" @click="fetchAgent(); fetchJobs()">
+                <Button variant="outline" size="icon" :aria-label="t('common.refresh')" @click="fetchAgent(); fetchJobs()">
                     <RefreshCw class="w-4 h-4" />
                 </Button>
                 <Button v-if="authStore.isAdmin" variant="outline" size="sm" @click="editSheetOpen = true">
                     <PencilLine class="w-4 h-4 mr-1.5" />
-                    Rename
+                    {{ t('agentDetail.rename') }}
                 </Button>
                 <Button v-if="authStore.isAdmin && mergedAgent.identity_bound" variant="outline" size="sm"
                     @click="resetIdentityDialogOpen = true">
                     <KeyRound class="w-4 h-4 mr-1.5" />
-                    Reset identity
+                    {{ t('agentDetail.resetIdentity') }}
                 </Button>
                 <Button v-if="authStore.isAdmin" variant="outline" size="sm"
                     class="text-destructive hover:text-destructive border-destructive/30 hover:bg-destructive/5"
                     @click="deleteDialogOpen = true">
                     <Trash2 class="w-4 h-4 mr-1.5" />
-                    Delete
+                    {{ t('common.delete') }}
                 </Button>
             </div>
         </div>
@@ -374,8 +386,7 @@ onUnmounted(() => {
             class="border-amber-500/30 bg-amber-500/5 text-amber-600 dark:text-amber-400">
             <WifiOff class="h-4 w-4" />
             <AlertDescription>
-                Agent is offline — live metrics are not available. Last seen {{ formatLastSeen(mergedAgent.last_seen_at)
-                }}.
+                {{ t('agentDetail.offline', { time: formatLastSeen(mergedAgent.last_seen_at) }) }}
             </AlertDescription>
         </Alert>
 
@@ -388,21 +399,21 @@ onUnmounted(() => {
         </div>
         <div v-else-if="mergedAgent" class="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <div class="p-4 border rounded-md">
-                <p class="text-xs text-muted-foreground uppercase tracking-wide mb-1">OS / Arch</p>
+                <p class="text-xs text-muted-foreground uppercase tracking-wide mb-1">{{ t('agentDetail.osArch') }}</p>
                 <p class="text-sm font-medium">
                     {{ [mergedAgent.os, mergedAgent.arch].filter(Boolean).join(' / ') || '—' }}
                 </p>
             </div>
             <div class="p-4 border rounded-md">
-                <p class="text-xs text-muted-foreground uppercase tracking-wide mb-1">Version</p>
+                <p class="text-xs text-muted-foreground uppercase tracking-wide mb-1">{{ t('agentDetail.version') }}</p>
                 <p class="text-sm font-mono font-medium">{{ mergedAgent.version || '—' }}</p>
             </div>
             <div class="p-4 border rounded-md">
-                <p class="text-xs text-muted-foreground uppercase tracking-wide mb-1">Last Seen</p>
+                <p class="text-xs text-muted-foreground uppercase tracking-wide mb-1">{{ t('agentDetail.lastSeen') }}</p>
                 <p class="text-sm font-medium">{{ formatLastSeen(mergedAgent.last_seen_at) }}</p>
             </div>
             <div class="p-4 border rounded-md">
-                <p class="text-xs text-muted-foreground uppercase tracking-wide mb-1">Registered</p>
+                <p class="text-xs text-muted-foreground uppercase tracking-wide mb-1">{{ t('agentDetail.registered') }}</p>
                 <p class="text-sm font-medium">{{ formatDate(mergedAgent.created_at) }}</p>
             </div>
         </div>
@@ -410,12 +421,12 @@ onUnmounted(() => {
         <!-- Metrics chart -->
         <div class="border rounded-md p-4 flex flex-col gap-3">
             <div class="flex items-center justify-between">
-                <p class="text-sm font-medium">Resource Usage</p>
+                <p class="text-sm font-medium">{{ t('agentDetail.resourceUsage') }}</p>
                 <!-- Legend -->
                 <div class="flex items-center gap-4 text-xs text-muted-foreground">
                     <div class="flex items-center gap-1.5">
                         <Cpu class="w-3.5 h-3.5" :style="{ color: 'var(--chart-2)' }" />
-                        <span>CPU</span>
+                        <span>{{ t('agentDetail.cpu') }}</span>
                         <span v-if="latestMetrics" class="font-mono font-medium text-foreground">
                             {{ latestMetrics.cpu }}%
                         </span>
@@ -423,7 +434,7 @@ onUnmounted(() => {
                     </div>
                     <div class="flex items-center gap-1.5">
                         <MemoryStick class="w-3.5 h-3.5" :style="{ color: 'var(--chart-3)' }" />
-                        <span>Memory</span>
+                        <span>{{ t('agentDetail.memory') }}</span>
                         <span v-if="latestMetrics" class="font-mono font-medium text-foreground">
                             {{ latestMetrics.mem }}%
                         </span>
@@ -431,7 +442,7 @@ onUnmounted(() => {
                     </div>
                     <div class="flex items-center gap-1.5">
                         <HardDrive class="w-3.5 h-3.5" :style="{ color: 'var(--chart-4)' }" />
-                        <span>Disk</span>
+                        <span>{{ t('agentDetail.disk') }}</span>
                         <span v-if="latestMetrics" class="font-mono font-medium text-foreground">
                             {{ latestMetrics.disk }}%
                         </span>
@@ -462,25 +473,25 @@ onUnmounted(() => {
                     </ChartContainer>
                 </template>
                 <div v-else class="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
-                    Waiting for first heartbeat…
+                    {{ t('agentDetail.waitingHeartbeat') }}
                 </div>
             </div>
             <p class="text-xs text-muted-foreground">
-                Updated every 30 seconds via heartbeat. Chart shows the last {{ MAX_POINTS }} readings.
+                {{ t('agentDetail.heartbeatNote', { n: MAX_POINTS }) }}
             </p>
         </div>
 
         <!-- Recent jobs -->
         <div class="flex flex-col gap-3">
-            <p class="text-sm font-medium">Recent Jobs</p>
+            <p class="text-sm font-medium">{{ t('agentDetail.recentJobs') }}</p>
             <div class="border rounded-md overflow-x-auto">
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Policy</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Started</TableHead>
-                            <TableHead>Finished</TableHead>
+                            <TableHead>{{ t('agentDetail.colPolicy') }}</TableHead>
+                            <TableHead>{{ t('agentDetail.colStatus') }}</TableHead>
+                            <TableHead>{{ t('agentDetail.colStarted') }}</TableHead>
+                            <TableHead>{{ t('agentDetail.colFinished') }}</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -502,9 +513,9 @@ onUnmounted(() => {
                                             <ClipboardList class="w-10 h-10 text-muted-foreground" />
                                         </div>
                                         <div>
-                                            <p class="font-medium">No jobs yet</p>
+                                            <p class="font-medium">{{ t('agentDetail.noJobs') }}</p>
                                             <p class="mt-1 text-sm text-muted-foreground">
-                                                No jobs have run on this agent yet.
+                                                {{ t('agentDetail.noJobsDetail') }}
                                             </p>
                                         </div>
                                     </div>
@@ -518,7 +529,7 @@ onUnmounted(() => {
                                 class="cursor-pointer hover:bg-muted/50"
                                 tabindex="0"
                                 role="link"
-                                :aria-label="`View job for ${job.policy_name}`"
+                                :aria-label="t('agentDetail.viewJob', { name: (job as any).policy_name || job.policy_id })"
                                 @click="router.push(`/jobs/${job.id}`)"
                                 @keyup.enter="router.push(`/jobs/${job.id}`)">
                                 <TableCell class="font-medium">
@@ -526,7 +537,7 @@ onUnmounted(() => {
                                 </TableCell>
                                 <TableCell>
                                     <Badge :variant="jobStatusVariant(job.status)" :class="jobStatusClass(job.status)">
-                                        {{ job.status }}
+                                        {{ jobStatusLabel(job.status) }}
                                     </Badge>
                                 </TableCell>
                                 <TableCell class="text-sm text-muted-foreground">
@@ -544,7 +555,7 @@ onUnmounted(() => {
                         :to="{ name: 'jobs', query: { agent_id: agentId } }"
                         class="text-sm text-muted-foreground hover:text-foreground transition-colors"
                     >
-                        View all jobs →
+                        {{ t('agentDetail.viewAllJobs') }}
                     </RouterLink>
                 </div>
             </div>
@@ -564,20 +575,17 @@ onUnmounted(() => {
     <AlertDialog :open="resetIdentityDialogOpen" @update:open="resetIdentityDialogOpen = $event">
         <AlertDialogContent>
             <AlertDialogHeader>
-                <AlertDialogTitle>Reset agent identity?</AlertDialogTitle>
+                <AlertDialogTitle>{{ t('agentDetail.resetTitle') }}</AlertDialogTitle>
                 <AlertDialogDescription>
                     <span v-if="mergedAgent">
-                        <strong>{{ mergedAgent.name }}</strong> is bound to the client certificate it
-                        registered with. Resetting lets the next certificate that registers as this
-                        agent take it over. Do this only when the agent was re-enrolled and is now
-                        refused; a connected agent simply binds its own certificate again.
+                        <strong>{{ mergedAgent.name }}</strong>{{ t('agentDetail.resetBodySuffix') }}
                     </span>
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-                <AlertDialogCancel :disabled="resetIdentityLoading">Cancel</AlertDialogCancel>
+                <AlertDialogCancel :disabled="resetIdentityLoading">{{ t('common.cancel') }}</AlertDialogCancel>
                 <AlertDialogAction :disabled="resetIdentityLoading" @click="confirmResetIdentity">
-                    {{ resetIdentityLoading ? 'Resetting…' : 'Reset identity' }}
+                    {{ resetIdentityLoading ? t('agentDetail.resetting') : t('agentDetail.resetIdentity') }}
                 </AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>

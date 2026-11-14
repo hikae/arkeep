@@ -12,9 +12,11 @@ import { useNotificationStore } from '@/stores/notification'
 import { useAuthStore } from '@/stores/auth'
 import { useWebSocket } from '@/services/websocket'
 import type { WSNotificationPayload } from '@/types'
+import { useI18n } from 'vue-i18n'
 
 const notifStore = useNotificationStore()
 const auth = useAuthStore()
+const { t } = useI18n()
 
 onMounted(() => {
     notifStore.fetchRecent()
@@ -49,18 +51,18 @@ function typeIconClass(type: string): string {
 function formatRelative(dateStr: string): string {
     const diffMs = Date.now() - new Date(dateStr).getTime()
     const minutes = Math.floor(diffMs / 60_000)
-    if (minutes < 1) return 'just now'
-    if (minutes < 60) return `${minutes}m ago`
+    if (minutes < 1) return t('notifications.justNow')
+    if (minutes < 60) return t('notifications.minutesAgo', { n: minutes })
     const hours = Math.floor(minutes / 60)
-    if (hours < 24) return `${hours}h ago`
-    return `${Math.floor(hours / 24)}d ago`
+    if (hours < 24) return t('notifications.hoursAgo', { n: hours })
+    return t('notifications.daysAgo', { n: Math.floor(hours / 24) })
 }
 </script>
 
 <template>
     <DropdownMenu>
         <DropdownMenuTrigger as-child>
-            <Button variant="ghost" size="icon" class="relative" aria-label="Notifications">
+            <Button variant="ghost" size="icon" class="relative" :aria-label="t('notifications.ariaLabel')">
                 <Bell class="size-4" />
                 <!-- Unread badge -->
                 <span
@@ -75,12 +77,12 @@ function formatRelative(dateStr: string): string {
 
             <!-- Header row -->
             <div class="flex items-center justify-between px-4 py-3">
-                <span class="text-sm font-semibold">Notifications</span>
+                <span class="text-sm font-semibold">{{ t('notifications.title') }}</span>
                 <button
                     v-if="notifStore.unreadCount > 0"
                     class="text-xs text-muted-foreground hover:text-foreground transition-colors"
                     @click.stop="notifStore.markAllRead()">
-                    Mark all as read
+                    {{ t('notifications.markAllRead') }}
                 </button>
             </div>
 
@@ -88,13 +90,13 @@ function formatRelative(dateStr: string): string {
 
             <!-- Loading -->
             <div v-if="notifStore.loading" class="px-4 py-8 text-center text-sm text-muted-foreground">
-                Loading…
+                {{ t('notifications.loading') }}
             </div>
 
             <!-- Empty state -->
             <div v-else-if="notifStore.items.length === 0"
                 class="px-4 py-8 text-center text-sm text-muted-foreground">
-                No notifications yet
+                {{ t('notifications.empty') }}
             </div>
 
             <!-- Notification list -->
@@ -139,9 +141,9 @@ function formatRelative(dateStr: string): string {
                 <DropdownMenuSeparator class="my-0" />
                 <div class="px-4 py-2 text-center">
                     <span class="text-xs text-muted-foreground">
-                        Showing {{ notifStore.items.length }}
+                        {{ t('notifications.showing', { shown: notifStore.items.length }) }}
                         <template v-if="notifStore.total > notifStore.items.length">
-                            of {{ notifStore.total }}
+                            {{ t('notifications.of', { total: notifStore.total }) }}
                         </template>
                     </span>
                 </div>

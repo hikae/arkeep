@@ -5,6 +5,7 @@
 // password is chosen. Emits `verified` once the tokens are issued and `back`
 // when the user returns to the credentials step.
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useForm, useField } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
 import { z } from 'zod'
@@ -28,11 +29,13 @@ const emit = defineEmits<{
 
 // ─── Validation schema ────────────────────────────────────────────────────────
 
+const { t } = useI18n()
+
 const schema = toTypedSchema(
     z.object({
-        password: passwordSchema,
+        password: passwordSchema(),
         confirm: z.string(),
-    }).refine((d) => d.password === d.confirm, { path: ['confirm'], message: 'Passwords do not match' }),
+    }).refine((d) => d.password === d.confirm, { path: ['confirm'], message: t('validation.passwordsDoNotMatch') }),
 )
 
 const { handleSubmit, isSubmitting } = useForm({
@@ -61,7 +64,7 @@ const onSubmit = handleSubmit(async (values) => {
         emit('verified')
     } catch (e) {
         saving.value = false
-        serverError.value = apiErrorMessage(e, 'Could not set the new password. Sign in again.')
+        serverError.value = apiErrorMessage(e, t('passwordChangeForm.error'))
     }
 })
 </script>
@@ -71,9 +74,9 @@ const onSubmit = handleSubmit(async (values) => {
         <FieldGroup>
             <!-- Title -->
             <div class="flex flex-col items-center gap-2 text-center">
-                <h1 class="text-2xl font-bold">Choose a new password</h1>
+                <h1 class="text-2xl font-bold">{{ t('passwordChangeForm.title') }}</h1>
                 <p class="text-sm text-muted-foreground text-balance">
-                    An administrator set your password. Choose your own to continue.
+                    {{ t('passwordChangeForm.subtitle') }}
                 </p>
             </div>
 
@@ -90,7 +93,7 @@ const onSubmit = handleSubmit(async (values) => {
 
             <!-- New password -->
             <Field>
-                <FieldLabel for="new-password">New password</FieldLabel>
+                <FieldLabel for="new-password">{{ t('passwordChangeForm.newPassword') }}</FieldLabel>
                 <Input id="new-password" v-model="passwordValue" type="password" autocomplete="new-password"
                     autofocus :disabled="saving"
                     :class="passwordError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
@@ -99,7 +102,7 @@ const onSubmit = handleSubmit(async (values) => {
 
             <!-- Confirmation -->
             <Field>
-                <FieldLabel for="confirm-password">Confirm new password</FieldLabel>
+                <FieldLabel for="confirm-password">{{ t('passwordChangeForm.confirmNewPassword') }}</FieldLabel>
                 <Input id="confirm-password" v-model="confirmValue" type="password" autocomplete="new-password"
                     :disabled="saving"
                     :class="confirmError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
@@ -110,7 +113,7 @@ const onSubmit = handleSubmit(async (values) => {
             <Field>
                 <Button type="submit" class="w-full" :disabled="isSubmitting || saving">
                     <Loader2 v-if="isSubmitting || saving" class="size-4 animate-spin" />
-                    {{ isSubmitting || saving ? 'Saving…' : 'Set password and sign in' }}
+                    {{ isSubmitting || saving ? t('passwordChangeForm.saving') : t('passwordChangeForm.submit') }}
                 </Button>
             </Field>
 
@@ -119,7 +122,7 @@ const onSubmit = handleSubmit(async (values) => {
                 class="inline-flex items-center justify-center gap-1 text-sm text-muted-foreground hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
                 @click="emit('back')">
                 <ArrowLeft class="size-4" />
-                Back to sign in
+                {{ t('passwordChangeForm.backToSignIn') }}
             </button>
         </FieldGroup>
     </form>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useForm, useField } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
 import { z } from 'zod'
@@ -36,6 +37,8 @@ import type { ApiResponse, NotificationProvider, NotificationProviderPriorities 
 // List
 // ---------------------------------------------------------------------------
 
+const { t } = useI18n()
+
 const providers = ref<NotificationProvider[]>([])
 const loading = ref(false)
 
@@ -66,11 +69,11 @@ function summary(p: NotificationProvider): string {
 // Add / edit sheet
 // ---------------------------------------------------------------------------
 
-const EVENTS: { key: keyof NotificationProviderPriorities; label: string }[] = [
-    { key: 'job_failure', label: 'Job failed' },
-    { key: 'job_success', label: 'Job succeeded' },
-    { key: 'agent_offline', label: 'Agent went offline' },
-    { key: 'agent_online', label: 'Agent came back online' },
+const EVENTS: { key: keyof NotificationProviderPriorities; labelKey: string }[] = [
+    { key: 'job_failure', labelKey: 'settingsNotifications.jobFailed' },
+    { key: 'job_success', labelKey: 'settingsNotifications.jobSucceeded' },
+    { key: 'agent_offline', labelKey: 'settingsNotifications.agentOffline' },
+    { key: 'agent_online', labelKey: 'settingsNotifications.agentOnline' },
 ]
 
 const sheetOpen = ref(false)
@@ -90,19 +93,19 @@ const cleared = ref<string[]>([])
 
 const schema = computed(() => toTypedSchema(
     z.object({
-        name: z.string().trim().min(1, 'Name is required').max(100, 'At most 100 characters'),
+        name: z.string().trim().min(1, t('notificationProviders.validation.nameRequired')).max(100, t('notificationProviders.validation.max100')),
         enabled: z.boolean(),
         fields: z.record(z.string(), z.string()),
         priorities: z.object({
-            job_success: z.string().max(32, 'At most 32 characters'),
-            job_failure: z.string().max(32, 'At most 32 characters'),
-            agent_offline: z.string().max(32, 'At most 32 characters'),
-            agent_online: z.string().max(32, 'At most 32 characters'),
+            job_success: z.string().max(32, t('notificationProviders.validation.max32')),
+            job_failure: z.string().max(32, t('notificationProviders.validation.max32')),
+            agent_offline: z.string().max(32, t('notificationProviders.validation.max32')),
+            agent_online: z.string().max(32, t('notificationProviders.validation.max32')),
         }),
     }).superRefine((data, ctx) => {
         for (const f of selected.value?.fields ?? []) {
             if (f.required && !(data.fields[f.key] ?? '').trim() && !(f.secret && secretStored(f.key))) {
-                ctx.addIssue({ code: 'custom', path: ['fields', f.key], message: `${f.label} is required` })
+                ctx.addIssue({ code: 'custom', path: ['fields', f.key], message: t('notificationProviders.validation.fieldRequired', { field: t(f.labelKey) }) })
             }
         }
     }),
@@ -120,7 +123,7 @@ function formValues(def: ProviderTypeDef | null, provider: NotificationProvider 
         fields[f.key] = f.secret ? '' : (provider?.config[f.key] ?? '')
     }
     return {
-        name: provider?.name ?? def?.label ?? '',
+        name: provider?.name ?? (def ? t(def.labelKey) : ''),
         enabled: provider?.enabled ?? true,
         fields,
         priorities: provider ? { ...provider.priorities } : emptyPriorities(),
@@ -186,7 +189,7 @@ function requestBody(values: { name: string; enabled: boolean; fields: Record<st
     for (const f of def.fields) {
         fields[f.key] = (values.fields[f.key] ?? '').trim()
     }
-    const priorities = def.priorityHelp ? values.priorities : emptyPriorities()
+    const priorities = def.priorityHelpKey ? values.priorities : emptyPriorities()
     return {
         name: values.name.trim(), type: def.type, enabled: values.enabled, fields, priorities,
         clear_secrets: cleared.value.filter((k) => !fields[k]),
@@ -205,7 +208,7 @@ const submit = handleSubmit(async (values) => {
         sheetOpen.value = false
         await fetchProviders()
     } catch (e: any) {
-        formError.value = apiErrorMessage(e, 'Failed to save the notification provider')
+        formError.value = apiErrorMessage(e, t('notificationProviders.saveFailed'))
     }
 })
 
@@ -226,9 +229,9 @@ const sendTest = handleSubmit(async (values) => {
             method: 'POST',
             body: { ...requestBody(values), id: editing.value?.id ?? '' },
         })
-        testResult.value = { ok: true, message: 'Test notification sent.' }
+        testResult.value = { ok: true, message: t('notificationProviders.testSent') }
     } catch (e: any) {
-        testResult.value = { ok: false, message: apiErrorMessage(e, 'Failed to send the test notification') }
+        testResult.value = { ok: false, message: apiErrorMessage(e, t('notificationProviders.testFailed')) }
     } finally {
         testing.value = false
     }
@@ -258,7 +261,7 @@ async function confirmDelete() {
         deleteOpen.value = false
         await fetchProviders()
     } catch (e: any) {
-        deleteError.value = apiErrorMessage(e, 'Failed to delete the notification provider')
+        deleteError.value = apiErrorMessage(e, t('notificationProviders.deleteFailed'))
     } finally {
         deleteSubmitting.value = false
     }
@@ -273,16 +276,15 @@ async function confirmDelete() {
                     <BellRing class="size-4" />
                 </div>
                 <div class="min-w-0">
-                    <p class="text-sm font-medium">Push and chat providers</p>
+                    <p class="text-sm font-medium">{{ t('notificationProviders.title') }}</p>
                     <p class="text-xs text-muted-foreground">
-                        Gotify, ntfy, Telegram, Discord and more, each with its own priority per event.
-                        Saved as you add or edit them.
+                        {{ t('notificationProviders.description') }}
                     </p>
                 </div>
             </div>
             <Button type="button" size="sm" class="shrink-0" @click="openCreate">
                 <Plus class="size-4" />
-                Add provider
+                {{ t('notificationProviders.addProvider') }}
             </Button>
         </div>
 
@@ -291,7 +293,7 @@ async function confirmDelete() {
         </div>
 
         <p v-else-if="providers.length === 0" class="border-t px-4 py-4 text-center text-sm text-muted-foreground">
-            No providers configured.
+            {{ t('notificationProviders.empty') }}
         </p>
 
         <div v-else class="divide-y border-t">
@@ -309,21 +311,21 @@ async function confirmDelete() {
                         <div class="flex items-center gap-2">
                             <span class="text-sm font-medium truncate">{{ p.name }}</span>
                             <Badge :variant="p.enabled ? 'default' : 'secondary'">
-                                {{ p.enabled ? 'Enabled' : 'Disabled' }}
+                                {{ p.enabled ? t('common.enabled') : t('common.disabled') }}
                             </Badge>
                         </div>
                         <p class="text-xs text-muted-foreground truncate">
-                            {{ providerTypeDef(p.type)?.label ?? p.type }}<template v-if="summary(p)"> · {{ summary(p)
+                            {{ providerTypeDef(p.type) ? t(providerTypeDef(p.type)!.labelKey) : p.type }}<template v-if="summary(p)"> · {{ summary(p)
                             }}</template>
                         </p>
                     </div>
                 </div>
                 <div class="flex items-center gap-1 shrink-0">
-                    <Button type="button" variant="ghost" size="icon" :aria-label="`Edit ${p.name}`"
+                    <Button type="button" variant="ghost" size="icon" :aria-label="t('notificationProviders.editAria', { name: p.name })"
                         @click="openEdit(p)">
                         <Pencil class="size-4" />
                     </Button>
-                    <Button type="button" variant="ghost" size="icon" :aria-label="`Delete ${p.name}`"
+                    <Button type="button" variant="ghost" size="icon" :aria-label="t('notificationProviders.deleteAria', { name: p.name })"
                         class="text-destructive hover:text-destructive" @click="openDelete(p)">
                         <Trash2 class="size-4" />
                     </Button>
@@ -337,12 +339,12 @@ async function confirmDelete() {
         <SheetContent class="sm:max-w-lg overflow-y-auto">
             <SheetHeader>
                 <SheetTitle>
-                    {{ editing ? 'Edit notification provider' : selected ? `Add ${selected.label}` : 'Add notification provider' }}
+                    {{ editing ? t('notificationProviders.editTitle') : selected ? t('notificationProviders.addTypeTitle', { service: t(selected.labelKey) }) : t('notificationProviders.addTitle') }}
                 </SheetTitle>
                 <SheetDescription>
                     {{ selected
-                        ? (editing ? 'Leave a secret field blank to keep its current value.' : 'Fill in what the service needs: Arkeep builds the rest.')
-                        : 'Choose the service to send notifications to.' }}
+                        ? (editing ? t('notificationProviders.editDescription') : t('notificationProviders.addDescription'))
+                        : t('notificationProviders.pickerDescription') }}
                 </SheetDescription>
             </SheetHeader>
 
@@ -357,7 +359,7 @@ async function confirmDelete() {
                         <path :d="def.iconPath" />
                     </svg>
                     <component :is="def.icon" v-else class="size-6" />
-                    <span class="text-center leading-tight">{{ def.label }}</span>
+                    <span class="text-center leading-tight">{{ t(def.labelKey) }}</span>
                 </button>
             </div>
 
@@ -372,11 +374,11 @@ async function confirmDelete() {
                     <Button v-if="!editing" type="button" variant="ghost" size="sm" class="self-start -ml-2"
                         @click="selected = null">
                         <ArrowLeft class="size-4" />
-                        Choose another service
+                        {{ t('notificationProviders.chooseAnother') }}
                     </Button>
 
                     <Field>
-                        <FieldLabel for="provider-name">Name</FieldLabel>
+                        <FieldLabel for="provider-name">{{ t('common.name') }}</FieldLabel>
                         <Input id="provider-name" v-model="formName" autocomplete="off"
                             :class="nameError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                         <FieldError v-if="nameError">{{ nameError }}</FieldError>
@@ -384,34 +386,34 @@ async function confirmDelete() {
 
                     <Field v-for="f in selected.fields" :key="f.key">
                         <FieldLabel :for="`provider-field-${f.key}`">
-                            {{ f.label }}
+                            {{ t(f.labelKey) }}
                             <span v-if="!f.required || (f.secret && secretStored(f.key))"
-                                class="text-muted-foreground font-normal">(optional)</span>
+                                class="text-muted-foreground font-normal">{{ t('notificationProviders.optional') }}</span>
                         </FieldLabel>
                         <Input :id="`provider-field-${f.key}`" v-model="fieldInputs[f.key]!.value.value"
                             :type="f.secret ? 'password' : 'text'"
-                            :placeholder="f.secret && secretStored(f.key) ? '(unchanged)' : (f.placeholder ?? '')"
+                            :placeholder="f.secret && secretStored(f.key) ? t('notificationProviders.unchanged') : (f.placeholderKey ? t(f.placeholderKey) : (f.placeholder ?? ''))"
                             :autocomplete="f.secret ? 'new-password' : 'off'"
                             :class="fieldInputs[f.key]!.errorMessage.value ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
-                        <p v-if="f.help" class="text-xs text-muted-foreground">{{ f.help }}</p>
+                        <p v-if="f.helpKey" class="text-xs text-muted-foreground">{{ t(f.helpKey) }}</p>
                         <Button v-if="f.secret && !f.required && secretStored(f.key)" type="button" variant="link"
                             size="sm" class="self-start h-auto p-0 text-xs" @click="cleared.push(f.key)">
-                            Remove the saved {{ f.label.toLowerCase() }}
+                            {{ t('notificationProviders.removeSaved', { field: t(f.labelKey).toLowerCase() }) }}
                         </Button>
                         <FieldError v-if="fieldInputs[f.key]!.errorMessage.value">{{ fieldInputs[f.key]!.errorMessage.value }}</FieldError>
                     </Field>
 
-                    <template v-if="selected.priorityHelp">
+                    <template v-if="selected.priorityHelpKey">
                         <Separator />
                         <div>
-                            <p class="text-sm font-medium">Priority per event</p>
+                            <p class="text-sm font-medium">{{ t('notificationProviders.priorityTitle') }}</p>
                             <p class="text-xs text-muted-foreground">
-                                {{ selected.priorityHelp }} Leave empty for the service default.
+                                {{ t(selected.priorityHelpKey) }} {{ t('notificationProviders.prioritySuffix') }}
                             </p>
                         </div>
                         <div class="grid grid-cols-2 gap-3">
                             <Field v-for="ev in EVENTS" :key="ev.key">
-                                <FieldLabel :for="`provider-priority-${ev.key}`">{{ ev.label }}</FieldLabel>
+                                <FieldLabel :for="`provider-priority-${ev.key}`">{{ t(ev.labelKey) }}</FieldLabel>
                                 <Input :id="`provider-priority-${ev.key}`"
                                     v-model="priorityInputs[ev.key]!.value.value" autocomplete="off"
                                     :class="priorityInputs[ev.key]!.errorMessage.value ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
@@ -424,8 +426,8 @@ async function confirmDelete() {
 
                     <div class="flex items-center justify-between">
                         <div>
-                            <p class="text-sm font-medium">Enabled</p>
-                            <p class="text-xs text-muted-foreground">Send the enabled events to this provider.</p>
+                            <p class="text-sm font-medium">{{ t('common.enabled') }}</p>
+                            <p class="text-xs text-muted-foreground">{{ t('notificationProviders.enabledHelp') }}</p>
                         </div>
                         <Switch :model-value="formEnabled" @update:model-value="formEnabled = $event" />
                     </div>
@@ -434,9 +436,9 @@ async function confirmDelete() {
                         <Button type="button" variant="outline" size="sm" :disabled="testing" @click="sendTest">
                             <Loader2 v-if="testing" class="size-4 animate-spin" />
                             <Send v-else class="size-4" />
-                            {{ testing ? 'Sending…' : 'Send test notification' }}
+                            {{ testing ? t('settingsNotifications.sending') : t('notificationProviders.sendTest') }}
                         </Button>
-                        <p class="text-xs text-muted-foreground">Sent with the priority of "Job failed".</p>
+                        <p class="text-xs text-muted-foreground">{{ t('notificationProviders.testNote') }}</p>
                         <p v-if="testResult" data-testid="provider-test-result" class="text-xs"
                             :class="testResult.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'">
                             {{ testResult.message }}
@@ -445,10 +447,10 @@ async function confirmDelete() {
 
                     <SheetFooter class="mt-2 px-0">
                         <Button type="button" variant="outline" :disabled="isSubmitting"
-                            @click="onSheetOpenChange(false)">Cancel</Button>
+                            @click="onSheetOpenChange(false)">{{ t('common.cancel') }}</Button>
                         <Button type="submit" :disabled="isSubmitting">
                             <Loader2 v-if="isSubmitting" class="size-4 animate-spin" />
-                            {{ isSubmitting ? 'Saving…' : (editing ? 'Save Changes' : 'Add Provider') }}
+                            {{ isSubmitting ? t('common.saving') : (editing ? t('notificationProviders.saveChanges') : t('notificationProviders.addProviderSubmit')) }}
                         </Button>
                     </SheetFooter>
                 </FieldGroup>
@@ -460,10 +462,9 @@ async function confirmDelete() {
     <Dialog :open="deleteOpen" @update:open="deleteOpen = $event">
         <DialogContent class="max-w-sm">
             <DialogHeader>
-                <DialogTitle>Delete notification provider?</DialogTitle>
+                <DialogTitle>{{ t('notificationProviders.deleteTitle') }}</DialogTitle>
                 <DialogDescription>
-                    <strong>{{ deleting?.name }}</strong> will stop receiving notifications and be removed,
-                    with its pending deliveries. This action cannot be undone.
+                    {{ t('notificationProviders.deleteBodyPrefix') }}<strong>{{ deleting?.name }}</strong>{{ t('notificationProviders.deleteBodySuffix') }}
                 </DialogDescription>
             </DialogHeader>
             <Alert v-if="deleteError" variant="destructive" class="mt-2">
@@ -471,10 +472,10 @@ async function confirmDelete() {
                 <AlertDescription>{{ deleteError }}</AlertDescription>
             </Alert>
             <DialogFooter class="mt-4">
-                <Button variant="outline" :disabled="deleteSubmitting" @click="deleteOpen = false">Cancel</Button>
+                <Button variant="outline" :disabled="deleteSubmitting" @click="deleteOpen = false">{{ t('common.cancel') }}</Button>
                 <Button variant="destructive" :disabled="deleteSubmitting" @click="confirmDelete">
                     <Loader2 v-if="deleteSubmitting" class="size-4 animate-spin" />
-                    {{ deleteSubmitting ? 'Deleting…' : 'Delete' }}
+                    {{ deleteSubmitting ? t('common.deleting') : t('common.delete') }}
                 </Button>
             </DialogFooter>
         </DialogContent>

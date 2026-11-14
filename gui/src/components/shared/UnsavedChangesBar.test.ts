@@ -3,6 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
 import { defineComponent, h, ref } from 'vue'
 import { settle } from '@/test/mount'
+import { i18n } from '@/i18n'
 import UnsavedChangesBar from './UnsavedChangesBar.vue'
 
 // InPlaceTeleport renders the dialog where it is declared, inside the wrapper.
@@ -26,7 +27,7 @@ async function open(dirty: boolean) {
   })
   await router.push('/settings')
   await router.isReady()
-  const wrapper = mount(RouterView, { global: { plugins: [router], stubs: { teleport: InPlaceTeleport } } })
+  const wrapper = mount(RouterView, { global: { plugins: [router, i18n], stubs: { teleport: InPlaceTeleport } } })
   await flushPromises()
   return { wrapper, router, changed }
 }

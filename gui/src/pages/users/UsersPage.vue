@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, useTemplateRef, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
@@ -34,6 +35,7 @@ interface UserListResponse { items: User[]; total: number }
 // ---------------------------------------------------------------------------
 
 const users = ref<User[]>([])
+const { t, locale } = useI18n()
 const total = ref(0)
 const loading = ref(true)
 const error = ref<string | null>(null)
@@ -98,9 +100,13 @@ function roleVariant(role: string): 'default' | 'secondary' {
     return role === 'admin' ? 'default' : 'secondary'
 }
 
+function roleLabel(role: string): string {
+    return role === 'admin' ? t('users.roles.admin') : t('users.roles.user')
+}
+
 function formatDate(iso: string | null): string {
     if (!iso) return '—'
-    return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+    return new Date(iso).toLocaleString(locale.value, { dateStyle: 'medium', timeStyle: 'short' })
 }
 
 // ---------------------------------------------------------------------------
@@ -115,7 +121,7 @@ async function fetchUsers() {
         users.value = res.data.items
         total.value = res.data.total
     } catch (e: any) {
-        error.value = apiErrorMessage(e, 'Failed to load users.')
+        error.value = apiErrorMessage(e, t('users.loadFailed'))
     } finally {
         loading.value = false
     }
@@ -166,7 +172,7 @@ async function confirmDelete() {
         }
         await fetchUsers()
     } catch (e: any) {
-        error.value = apiErrorMessage(e, 'Failed to delete user.')
+        error.value = apiErrorMessage(e, t('users.deleteFailed'))
     } finally {
         deleteLoading.value = false
     }
@@ -190,7 +196,7 @@ async function confirmReset() {
         userToReset.value = null
         await fetchUsers()
     } catch (e: any) {
-        error.value = apiErrorMessage(e, 'Failed to reset two-factor authentication.')
+        error.value = apiErrorMessage(e, t('users.resetFailed'))
     } finally {
         resetLoading.value = false
     }
@@ -203,18 +209,18 @@ async function confirmReset() {
         <!-- Header -->
         <div class="flex items-center justify-between">
             <div>
-                <h1 class="text-2xl font-semibold tracking-tight">Users</h1>
+                <h1 class="text-2xl font-semibold tracking-tight">{{ t('users.title') }}</h1>
                 <p class="mt-1 text-sm text-muted-foreground">
-                    Manage user accounts and access levels.
+                    {{ t('users.subtitle') }}
                 </p>
             </div>
             <div class="flex items-center gap-2">
-                <Button variant="outline" size="icon" :disabled="loading" @click="fetchUsers">
+                <Button variant="outline" size="icon" :aria-label="t('common.refresh')" :disabled="loading" @click="fetchUsers">
                     <RefreshCw class="w-4 h-4" :class="{ 'animate-spin': loading }" />
                 </Button>
                 <Button @click="openCreate">
                     <Plus class="w-4 h-4" />
-                    New User
+                    {{ t('users.newUser') }}
                 </Button>
             </div>
         </div>
@@ -229,10 +235,10 @@ async function confirmReset() {
             <Table>
                 <TableHeader>
                     <TableRow>
-                        <TableHead>User</TableHead>
-                        <TableHead>Role</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Last Login</TableHead>
+                        <TableHead>{{ t('users.colUser') }}</TableHead>
+                        <TableHead>{{ t('users.colRole') }}</TableHead>
+                        <TableHead>{{ t('users.colStatus') }}</TableHead>
+                        <TableHead>{{ t('users.colLastLogin') }}</TableHead>
                         <TableHead class="w-13" />
                     </TableRow>
                 </TableHeader>
@@ -256,9 +262,9 @@ async function confirmReset() {
                                         <Users class="w-8 h-8 text-muted-foreground" />
                                     </div>
                                     <div>
-                                        <p class="font-medium">No users found</p>
+                                        <p class="font-medium">{{ t('users.empty') }}</p>
                                         <p class="mt-1 text-sm text-muted-foreground">
-                                            Create the first user account to get started.
+                                            {{ t('users.emptyDetail') }}
                                         </p>
                                     </div>
                                 </div>
@@ -284,14 +290,14 @@ async function confirmReset() {
                             </TableCell>
                             <TableCell>
                                 <div class="flex items-center gap-1.5">
-                                    <Badge :variant="roleVariant(u.role)">{{ u.role }}</Badge>
+                                    <Badge :variant="roleVariant(u.role)">{{ roleLabel(u.role) }}</Badge>
                                     <Badge v-if="u.two_factor_enabled" variant="outline">2FA</Badge>
-                                    <Badge v-if="u.must_change_password" variant="outline">Password change pending</Badge>
+                                    <Badge v-if="u.must_change_password" variant="outline">{{ t('users.passwordPending') }}</Badge>
                                 </div>
                             </TableCell>
                             <TableCell>
                                 <Badge :variant="u.is_active ? 'default' : 'secondary'">
-                                    {{ u.is_active ? 'Active' : 'Inactive' }}
+                                    {{ u.is_active ? t('users.active') : t('users.inactive') }}
                                 </Badge>
                             </TableCell>
                             <TableCell class="text-sm text-muted-foreground">
@@ -302,27 +308,27 @@ async function confirmReset() {
                                     <DropdownMenuTrigger as-child>
                                         <Button variant="ghost" size="icon" class="w-8 h-8">
                                             <MoreHorizontal class="w-4 h-4" />
-                                            <span class="sr-only">Open actions</span>
+                                            <span class="sr-only">{{ t('users.openActions') }}</span>
                                         </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end">
                                         <DropdownMenuItem @click="openEdit(u)">
                                             <PencilLine class="w-4 h-4 mr-2" />
-                                            Edit
+                                            {{ t('common.edit') }}
                                         </DropdownMenuItem>
                                         <DropdownMenuItem v-if="canSetPassword(u)" @click="openSetPassword(u)">
                                             <KeyRound class="w-4 h-4 mr-2" />
-                                            Set password
+                                            {{ t('users.setPassword') }}
                                         </DropdownMenuItem>
                                         <DropdownMenuItem v-if="u.two_factor_enabled" @click="openResetDialog(u)">
                                             <ShieldOff class="w-4 h-4 mr-2" />
-                                            Reset 2FA
+                                            {{ t('users.reset2fa') }}
                                         </DropdownMenuItem>
                                         <DropdownMenuSeparator />
                                         <DropdownMenuItem class="text-destructive focus:text-destructive"
                                             @click="openDeleteDialog(u)">
                                             <Trash2 class="w-4 h-4 mr-2" />
-                                            Delete
+                                            {{ t('common.delete') }}
                                         </DropdownMenuItem>
                                     </DropdownMenuContent>
                                 </DropdownMenu>
@@ -337,15 +343,19 @@ async function confirmReset() {
         <!-- Pagination -->
         <div v-if="!loading && totalPages > 1" class="flex items-center justify-between text-sm text-muted-foreground">
             <span>
-                Showing {{ offset + 1 }}–{{ Math.min(offset + pageSize, total) }} of {{ total }} users
+                {{ t('users.showing', {
+                    from: offset + 1,
+                    to: Math.min(offset + pageSize, total),
+                    total,
+                }) }}
             </span>
             <div class="flex items-center gap-2">
                 <Button variant="outline" size="sm" :disabled="page === 1" @click="goToPage(page - 1)">
-                    Previous
+                    {{ t('agents.previous') }}
                 </Button>
                 <span class="px-2">{{ page }} / {{ totalPages }}</span>
                 <Button variant="outline" size="sm" :disabled="page === totalPages" @click="goToPage(page + 1)">
-                    Next
+                    {{ t('agents.next') }}
                 </Button>
             </div>
         </div>
@@ -364,19 +374,18 @@ async function confirmReset() {
     <AlertDialog :open="deleteDialogOpen" @update:open="deleteDialogOpen = $event">
         <AlertDialogContent>
             <AlertDialogHeader>
-                <AlertDialogTitle>Delete user?</AlertDialogTitle>
+                <AlertDialogTitle>{{ t('users.deleteTitle') }}</AlertDialogTitle>
                 <AlertDialogDescription>
                     <span v-if="userToDelete">
-                        <strong>{{ userToDelete.display_name }}</strong> ({{ userToDelete.email }}) will be
-                        permanently deleted. This action cannot be undone.
+                        {{ t('users.deleteBody', { name: userToDelete.display_name, email: userToDelete.email }) }}
                     </span>
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-                <AlertDialogCancel :disabled="deleteLoading">Cancel</AlertDialogCancel>
+                <AlertDialogCancel :disabled="deleteLoading">{{ t('common.cancel') }}</AlertDialogCancel>
                 <AlertDialogAction class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                     :disabled="deleteLoading" @click="confirmDelete">
-                    {{ deleteLoading ? 'Deleting…' : 'Delete' }}
+                    {{ deleteLoading ? t('users.deleting') : t('common.delete') }}
                 </AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
@@ -386,18 +395,17 @@ async function confirmReset() {
     <AlertDialog :open="resetDialogOpen" @update:open="resetDialogOpen = $event">
         <AlertDialogContent>
             <AlertDialogHeader>
-                <AlertDialogTitle>Reset two-factor authentication?</AlertDialogTitle>
+                <AlertDialogTitle>{{ t('users.resetTitle') }}</AlertDialogTitle>
                 <AlertDialogDescription>
                     <span v-if="userToReset">
-                        <strong>{{ userToReset.display_name }}</strong> ({{ userToReset.email }}) will need to
-                        set up two-factor authentication again. They will be signed out of all sessions.
+                        {{ t('users.resetBody', { name: userToReset.display_name, email: userToReset.email }) }}
                     </span>
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-                <AlertDialogCancel :disabled="resetLoading">Cancel</AlertDialogCancel>
+                <AlertDialogCancel :disabled="resetLoading">{{ t('common.cancel') }}</AlertDialogCancel>
                 <AlertDialogAction :disabled="resetLoading" @click="confirmReset">
-                    {{ resetLoading ? 'Resetting…' : 'Reset' }}
+                    {{ resetLoading ? t('users.resetting') : t('users.resetConfirm') }}
                 </AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>

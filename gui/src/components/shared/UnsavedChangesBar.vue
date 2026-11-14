@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { onBeforeRouteLeave } from 'vue-router'
 import { Button } from '@/components/ui/button'
 import {
@@ -16,6 +17,8 @@ import { AlertCircle, Loader2, TriangleAlert } from '@lucide/vue'
 // page, it sticks to the bottom of the view while the form has changes not
 // saved yet, or while the last save failed, whose error it shows. While there
 // are changes, leaving the page asks for confirmation first.
+const { t } = useI18n()
+
 const props = defineProps<{
     dirty: boolean
     saving: boolean
@@ -61,7 +64,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
         leave-active-class="transition-all duration-150" leave-to-class="translate-y-2 opacity-0">
         <div v-if="dirty || error" class="sticky bottom-4 z-10 mt-6" data-testid="unsaved-changes-bar">
             <!-- Opaque background under a tint: the bar scrolls over the page. -->
-            <div role="region" aria-label="Unsaved changes" class="overflow-hidden rounded-lg border bg-background shadow-lg"
+            <div :aria-label="t('common.unsavedChanges')" role="region" class="overflow-hidden rounded-lg border bg-background shadow-lg"
                 :class="error ? 'border-destructive/50' : 'border-primary/50'">
                 <div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
                     :class="error ? 'bg-destructive/10' : 'bg-primary/10'">
@@ -71,16 +74,16 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
                     </p>
                     <p v-else class="flex items-center gap-2 text-sm font-medium">
                         <TriangleAlert class="size-4 shrink-0 text-primary" />
-                        You have unsaved changes.
+                        {{ t('common.unsavedChangesMessage') }}
                     </p>
                     <div class="flex gap-2">
                         <Button type="button" variant="outline" size="sm" :disabled="saving || !dirty"
                             @click="emit('discard')">
-                            Discard
+                            {{ t('common.discardChanges') }}
                         </Button>
                         <Button type="button" size="sm" :disabled="saving" @click="emit('save')">
                             <Loader2 v-if="saving" class="size-4 animate-spin" />
-                            {{ saving ? 'Saving…' : 'Save' }}
+                            {{ saving ? t('common.saving') : t('common.save') }}
                         </Button>
                     </div>
                 </div>
@@ -91,17 +94,17 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', onBeforeUnload)
     <AlertDialog :open="leaveOpen" @update:open="(open: boolean) => { if (!open) settleLeave(false) }">
         <AlertDialogContent>
             <AlertDialogHeader>
-                <AlertDialogTitle>Leave without saving?</AlertDialogTitle>
+                <AlertDialogTitle>{{ t('common.leaveWithoutSavingTitle') }}</AlertDialogTitle>
                 <AlertDialogDescription>
-                    You have unsaved changes on this page. If you leave now, they are lost.
+                    {{ t('common.leaveWithoutSavingBody') }}
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
                 <!-- Plain buttons: the dialog's own Action and Cancel close it first,
                      which would settle the navigation as a cancel. Escape and a
                      click outside still mean stay. -->
-                <Button type="button" variant="outline" @click="settleLeave(false)">Stay on this page</Button>
-                <Button type="button" variant="destructive" @click="settleLeave(true)">Leave without saving</Button>
+                <Button type="button" variant="outline" @click="settleLeave(false)">{{ t('common.stayOnPage') }}</Button>
+                <Button type="button" variant="destructive" @click="settleLeave(true)">{{ t('common.leaveWithoutSaving') }}</Button>
             </AlertDialogFooter>
         </AlertDialogContent>
     </AlertDialog>
