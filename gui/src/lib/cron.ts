@@ -1,4 +1,5 @@
-import cronstrue from 'cronstrue'
+import cronstrue from 'cronstrue/i18n'
+import { i18n } from '@/i18n'
 
 // The server parses schedules with robfig/cron's standard parser
 // (server/internal/api/policies.go): five fields, the @-descriptors and an
@@ -18,6 +19,11 @@ const DESCRIPTORS: Record<string, string> = {
 
 const TZ_PREFIX = /^(?:CRON_TZ|TZ)=(\S+)\s+/
 
+// cronstrue's own locale name for the UI language.
+function cronLocale(): string {
+  return i18n.global.locale.value === 'zh-CN' ? 'zh_CN' : 'en'
+}
+
 /**
  * Returns a human-readable description of a cron expression ("At 02:00, only
  * on Sunday"), or null when the expression is empty or not one the server
@@ -33,10 +39,10 @@ export function describeCron(expression: string): string | null {
     zone = tz[1]!
     expr = expr.slice(tz[0].length)
   }
-  const suffix = zone ? ` (${zone})` : ''
+  const suffix = zone ? i18n.global.t('cron.zoneSuffix', { zone }) : ''
 
   const every = /^@every\s+(\S+)$/.exec(expr)
-  if (every) return `Every ${every[1]}${suffix}`
+  if (every) return i18n.global.t('cron.every', { duration: every[1] }) + suffix
 
   if (expr.startsWith('@')) {
     const mapped = DESCRIPTORS[expr]
@@ -50,7 +56,7 @@ export function describeCron(expression: string): string | null {
   if (expr.includes('#') || /[LW]/i.test(dom!) || /L/i.test(dow!)) return null
 
   try {
-    return cronstrue.toString(expr, { use24HourTimeFormat: true }) + suffix
+    return cronstrue.toString(expr, { locale: cronLocale(), use24HourTimeFormat: true }) + suffix
   } catch {
     return null
   }

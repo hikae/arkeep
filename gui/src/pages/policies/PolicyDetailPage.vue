@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import {
     Table,
@@ -40,6 +41,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import RefreshButton from '@/components/shared/RefreshButton.vue'
 import { useLiveRefresh, type FetchOptions } from '@/composables/useLiveRefresh'
 import { api, apiErrorMessage } from '@/services/api'
+import { statusLabel as jobStatusLabel } from '@/lib/jobUtils'
 import type { Policy, Job, ApiResponse } from '@/types'
 import PolicySheet from '@/components/policies/PolicySheet.vue'
 import { scheduleLabel } from '@/lib/cron'
@@ -53,6 +55,7 @@ defineOptions({ inheritAttrs: false })
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const { t, locale } = useI18n()
 const policyId = route.params.id as string
 
 // ---------------------------------------------------------------------------
@@ -95,7 +98,7 @@ async function fetchPolicy({ quiet = false }: FetchOptions = {}) {
         policy.value = res.data
         error.value = null
     } catch (e: any) {
-        error.value = apiErrorMessage(e, 'Failed to load policy')
+        error.value = apiErrorMessage(e, t('policyDetail.loadFailed'))
     } finally {
         if (!quiet) loading.value = false
     }
@@ -132,7 +135,7 @@ async function triggerPolicy() {
         // Refresh jobs after a short delay to pick up the new pending job
         setTimeout(fetchJobs, 800)
     } catch (e: any) {
-        error.value = apiErrorMessage(e, 'Failed to trigger policy')
+        error.value = apiErrorMessage(e, t('policyDetail.triggerFailed'))
     } finally {
         triggerLoading.value = false
     }
@@ -144,7 +147,7 @@ async function confirmDelete() {
         await api(`/api/v1/policies/${policyId}`, { method: 'DELETE' })
         router.push('/policies')
     } catch (e: any) {
-        error.value = apiErrorMessage(e, 'Failed to delete policy')
+        error.value = apiErrorMessage(e, t('policyDetail.deleteFailed'))
     } finally {
         deleteLoading.value = false
         deleteDialogOpen.value = false
@@ -177,7 +180,7 @@ const parsedSources = computed(() => {
 
 function formatDate(date: string | null | undefined): string {
     if (!date) return '—'
-    return new Date(date).toLocaleString()
+    return new Date(date).toLocaleString(locale.value)
 }
 
 function jobStatusVariant(status: string): 'default' | 'secondary' | 'outline' | 'destructive' {
@@ -210,7 +213,7 @@ useLiveRefresh((c) => c.type === 'policies' && (c.id === policyId || c.id === ''
         <!-- ── Header ─────────────────────────────────────────────────────── -->
         <div class="flex items-start justify-between gap-4">
             <div class="flex items-center gap-3">
-                <Button variant="ghost" size="icon" @click="router.push('/policies')">
+                <Button variant="ghost" size="icon" :aria-label="t('policyDetail.backToPolicies')" @click="router.push('/policies')">
                     <ArrowLeft class="w-4 h-4" />
                 </Button>
                 <div>
@@ -222,11 +225,11 @@ useLiveRefresh((c) => c.type === 'policies' && (c.id === policyId || c.id === ''
                         <div class="flex items-center gap-2.5">
                             <h1 class="text-2xl font-semibold tracking-tight">{{ policy.name }}</h1>
                             <Badge :variant="policy.enabled ? 'default' : 'secondary'">
-                                {{ policy.enabled ? 'Enabled' : 'Disabled' }}
+                                {{ policy.enabled ? t('common.enabled') : t('common.disabled') }}
                             </Badge>
                         </div>
                         <p class="mt-0.5 text-sm text-muted-foreground">
-                            Agent: <span class="font-medium text-foreground">{{ policy.agent_name || '—' }}</span>
+                            {{ t('policyDetail.agent', { name: policy.agent_name || '—' }) }}
                         </p>
                     </template>
                 </div>
@@ -243,21 +246,21 @@ useLiveRefresh((c) => c.type === 'policies' && (c.id === policyId || c.id === ''
                                 @click="triggerPolicy">
                                 <Loader2 v-if="triggerLoading" class="w-4 h-4 mr-1.5 animate-spin" />
                                 <Play v-else class="w-4 h-4 mr-1.5" />
-                                Run Now
+                                {{ t('policies.runNow') }}
                             </Button>
                         </span>
                     </TooltipTrigger>
-                    <TooltipContent>Enable the policy to run a backup.</TooltipContent>
+                    <TooltipContent>{{ t('policies.enableToRun') }}</TooltipContent>
                 </Tooltip>
                 <Button v-if="authStore.isAdmin" variant="outline" size="sm" @click="editSheetOpen = true">
                     <PencilLine class="w-4 h-4 mr-1.5" />
-                    Edit
+                    {{ t('common.edit') }}
                 </Button>
                 <Button v-if="authStore.isAdmin" variant="outline" size="sm"
                     class="text-destructive hover:text-destructive border-destructive/30 hover:bg-destructive/5"
                     @click="deleteDialogOpen = true">
                     <Trash2 class="w-4 h-4 mr-1.5" />
-                    Delete
+                    {{ t('common.delete') }}
                 </Button>
             </div>
         </div>
@@ -276,19 +279,19 @@ useLiveRefresh((c) => c.type === 'policies' && (c.id === policyId || c.id === ''
         </div>
         <div v-else-if="policy" class="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <div class="p-4 border rounded-md">
-                <p class="text-xs text-muted-foreground uppercase tracking-wide mb-1">Schedule</p>
+<p class="text-xs text-muted-foreground uppercase tracking-wide mb-1">{{ t('policyDetail.schedule') }}</p>
                 <p class="text-sm font-mono font-medium" :title="policy.schedule">{{ scheduleLabel(policy.schedule) }}</p>
             </div>
             <div class="p-4 border rounded-md">
-                <p class="text-xs text-muted-foreground uppercase tracking-wide mb-1">Last Run</p>
+                <p class="text-xs text-muted-foreground uppercase tracking-wide mb-1">{{ t('policyDetail.lastRun') }}</p>
                 <p class="text-sm font-medium">{{ formatDate(policy.last_run_at) }}</p>
             </div>
             <div class="p-4 border rounded-md">
-                <p class="text-xs text-muted-foreground uppercase tracking-wide mb-1">Next Run</p>
+                <p class="text-xs text-muted-foreground uppercase tracking-wide mb-1">{{ t('policyDetail.nextRun') }}</p>
                 <p class="text-sm font-medium">{{ formatDate(policy.next_run_at) }}</p>
             </div>
             <div class="p-4 border rounded-md">
-                <p class="text-xs text-muted-foreground uppercase tracking-wide mb-1">Created</p>
+                <p class="text-xs text-muted-foreground uppercase tracking-wide mb-1">{{ t('policyDetail.created') }}</p>
                 <p class="text-sm font-medium">{{ formatDate(policy.created_at) }}</p>
             </div>
         </div>
@@ -298,8 +301,8 @@ useLiveRefresh((c) => c.type === 'policies' && (c.id === policyId || c.id === ''
 
             <!-- Sources -->
             <div class="border rounded-md p-4 flex flex-col gap-3">
-                <h2 class="text-sm font-semibold">Sources</h2>
-                <div v-if="parsedSources.length === 0" class="text-sm text-muted-foreground">No sources configured.
+                <h2 class="text-sm font-semibold">{{ t('policyDetail.sources') }}</h2>
+                <div v-if="parsedSources.length === 0" class="text-sm text-muted-foreground">{{ t('policyDetail.noSources') }}
                 </div>
                 <div v-else class="flex flex-col gap-2">
                     <div v-for="(src, idx) in parsedSources" :key="idx"
@@ -312,7 +315,7 @@ useLiveRefresh((c) => c.type === 'policies' && (c.id === policyId || c.id === ''
                         <div class="min-w-0">
                             <!-- The server sends a command source's command to admins only. -->
                             <p v-if="src.type === 'command' && !src.path" class="text-sm italic text-muted-foreground"
-                                data-testid="command-hidden">Command visible to administrators only</p>
+                                data-testid="command-hidden">{{ t('policyDetail.commandHidden') }}</p>
                             <p v-else class="text-sm font-mono truncate">{{ src.path }}</p>
                             <p v-if="src.label" class="text-xs text-muted-foreground">{{ src.label }}</p>
                             <p v-else class="text-xs text-muted-foreground">{{ src.type }}</p>
@@ -327,10 +330,9 @@ useLiveRefresh((c) => c.type === 'policies' && (c.id === policyId || c.id === ''
                  its own independent schedule. See the destination's own
                  detail page for its retention config and history. -->
             <div class="border rounded-md p-4 flex flex-col gap-3">
-                <h2 class="text-sm font-semibold">Destinations</h2>
+                <h2 class="text-sm font-semibold">{{ t('policyDetail.destinations') }}</h2>
                 <div v-if="!policy.destinations || policy.destinations.length === 0"
-                    class="text-sm text-muted-foreground">No
-                    destinations configured.</div>
+                    class="text-sm text-muted-foreground">{{ t('policyDetail.noDestinations') }}</div>
                 <div v-else class="flex flex-col gap-1.5">
                     <div v-for="dest in policy.destinations" :key="dest.destination_id"
                         class="flex items-center gap-2 rounded-md bg-muted/50 px-3 py-1.5">
@@ -357,7 +359,7 @@ useLiveRefresh((c) => c.type === 'policies' && (c.id === policyId || c.id === ''
         <!-- ── Recent Jobs ─────────────────────────────────────────────────── -->
         <div class="flex flex-col gap-3">
             <div class="flex items-center justify-between">
-                <h2 class="text-sm font-semibold">Recent Jobs</h2>
+                <h2 class="text-sm font-semibold">{{ t('policyDetail.recentJobs') }}</h2>
                 <Button variant="ghost" size="icon" class="w-7 h-7" :disabled="jobsLoading" @click="fetchJobs">
                     <RefreshCw class="w-3.5 h-3.5" :class="{ 'animate-spin': jobsLoading }" />
                 </Button>
@@ -367,9 +369,9 @@ useLiveRefresh((c) => c.type === 'policies' && (c.id === policyId || c.id === ''
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Started</TableHead>
-                            <TableHead>Finished</TableHead>
+                            <TableHead>{{ t('policyDetail.colStatus') }}</TableHead>
+                            <TableHead>{{ t('policyDetail.colStarted') }}</TableHead>
+                            <TableHead>{{ t('policyDetail.colFinished') }}</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -391,9 +393,9 @@ useLiveRefresh((c) => c.type === 'policies' && (c.id === policyId || c.id === ''
                                             <CalendarClock class="w-6 h-6 text-muted-foreground" />
                                         </div>
                                         <div>
-                                            <p class="font-medium text-sm">No jobs yet</p>
+                                            <p class="font-medium text-sm">{{ t('policyDetail.noJobs') }}</p>
                                             <p class="mt-1 text-xs text-muted-foreground">
-                                                Run the policy manually or wait for the next scheduled run.
+                                                {{ t('policyDetail.noJobsDetail') }}
                                             </p>
                                         </div>
                                     </div>
@@ -407,7 +409,7 @@ useLiveRefresh((c) => c.type === 'policies' && (c.id === policyId || c.id === ''
                                 @click="router.push(`/jobs/${job.id}`)">
                                 <TableCell>
                                     <Badge :variant="jobStatusVariant(job.status)">
-                                        {{ job.status }}
+                                        {{ jobStatusLabel(job.status) }}
                                     </Badge>
                                 </TableCell>
                                 <TableCell class="text-sm text-muted-foreground">
@@ -425,7 +427,7 @@ useLiveRefresh((c) => c.type === 'policies' && (c.id === policyId || c.id === ''
                         :to="{ name: 'jobs', query: { policy_id: policyId } }"
                         class="text-sm text-muted-foreground hover:text-foreground transition-colors"
                     >
-                        View all jobs →
+                        {{ t('policyDetail.viewAllJobs') }}
                     </RouterLink>
                 </div>
             </div>
@@ -441,21 +443,18 @@ useLiveRefresh((c) => c.type === 'policies' && (c.id === policyId || c.id === ''
     <AlertDialog :open="deleteDialogOpen" @update:open="deleteDialogOpen = $event">
         <AlertDialogContent>
             <AlertDialogHeader>
-                <AlertDialogTitle>Delete policy?</AlertDialogTitle>
+                <AlertDialogTitle>{{ t('policies.deleteTitle') }}</AlertDialogTitle>
                 <AlertDialogDescription>
                     <span v-if="policy">
-                        <strong>{{ policy.name }}</strong> will be deleted and its stored repository password erased.
-                        All scheduled runs for this policy will be removed.
-                        Its existing snapshots stay listed, and the backup data on the storage is not touched.
-                        This action cannot be undone.
+                        {{ t('policies.deleteBody', { name: policy.name }) }}
                     </span>
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-                <AlertDialogCancel :disabled="deleteLoading">Cancel</AlertDialogCancel>
+                <AlertDialogCancel :disabled="deleteLoading">{{ t('common.cancel') }}</AlertDialogCancel>
                 <AlertDialogAction class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                     :disabled="deleteLoading" @click="confirmDelete">
-                    {{ deleteLoading ? 'Deleting…' : 'Delete' }}
+                    {{ deleteLoading ? t('policies.deleting') : t('common.delete') }}
                 </AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>

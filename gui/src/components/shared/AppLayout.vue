@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/sidebar"
 import { computed } from "vue"
 import { useRoute } from "vue-router"
+import { useI18n } from "vue-i18n"
 import { useAuthStore } from "@/stores/auth"
 
 type Crumb = {
@@ -25,6 +26,7 @@ type Crumb = {
 }
 
 const route = useRoute()
+const { t } = useI18n()
 // In-app notifications are created for administrators only: the read-only
 // user role would only ever see an empty bell.
 const auth = useAuthStore()
@@ -35,10 +37,10 @@ const breadcrumbs = computed<Crumb[]>(() => {
         .filter((r) => r.meta?.breadcrumb)
         .map((r) => {
             const raw = r.meta.breadcrumb as string | ((route: any) => string)
-            const label = typeof raw === "function" ? raw(route) : raw
+            const key = typeof raw === "function" ? raw(route) : raw
 
             return {
-                label,
+                label: t(key),
                 to: r.name
                     ? { name: r.name as string, params: route.params, query: route.query }
                     : { path: r.path, query: route.query },
@@ -52,12 +54,12 @@ const breadcrumbs = computed<Crumb[]>(() => {
         <!-- Skip link: visible only on keyboard focus, jumps past sidebar nav -->
         <a href="#main-content"
             class="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-background focus:border focus:rounded-md focus:text-sm focus:font-medium focus:shadow-md">
-            Skip to content
+            {{ t('common.skipToContent') }}
         </a>
         <AppSidebar />
         <SidebarInset class="flex flex-col min-h-0">
             <header class="flex items-center h-16 gap-2 shrink-0 border-b px-4">
-                <SidebarTrigger class="-ml-1" aria-label="Toggle sidebar" />
+                <SidebarTrigger class="-ml-1" :aria-label="t('common.toggleSidebar')" />
                 <Separator orientation="vertical" class="mr-2 data-[orientation=vertical]:h-4" />
                 <Breadcrumb>
                     <BreadcrumbList>

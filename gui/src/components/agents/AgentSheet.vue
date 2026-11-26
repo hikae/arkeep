@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
     Sheet,
     SheetContent,
@@ -40,14 +41,18 @@ const emit = defineEmits<{
     saved: []
 }>()
 
+const { t } = useI18n()
+
 // ---------------------------------------------------------------------------
 // Form
 // ---------------------------------------------------------------------------
 
-const schema = toTypedSchema(
-    z.object({
-        name: z.string().min(1, 'Name is required'),
-    })
+const schema = computed(() =>
+    toTypedSchema(
+        z.object({
+            name: z.string().min(1, t('validation.nameRequired')),
+        })
+    ),
 )
 
 const { handleSubmit, resetForm, setValues, isSubmitting } = useForm({
@@ -91,7 +96,7 @@ const onSubmit = handleSubmit(async (values) => {
         emit('saved')
         resetForm()
     } catch (e: any) {
-        submitError.value = apiErrorMessage(e, 'Failed to save agent')
+        submitError.value = apiErrorMessage(e, t('agentSheet.saveFailed'))
     }
 })
 
@@ -108,10 +113,9 @@ function onOpenChange(value: boolean) {
     <Sheet :open="props.open" @update:open="onOpenChange">
         <SheetContent class="sm:max-w-md">
             <SheetHeader>
-                <SheetTitle>Rename Agent</SheetTitle>
+                <SheetTitle>{{ t('agentSheet.title') }}</SheetTitle>
                 <SheetDescription>
-                    Update the display name for
-                    <strong>{{ props.agent.hostname || props.agent.name }}</strong>.
+                    {{ t('agentSheet.description', { name: props.agent.hostname || props.agent.name }) }}
                 </SheetDescription>
             </SheetHeader>
 
@@ -128,8 +132,8 @@ function onOpenChange(value: boolean) {
                     </Transition>
 
                     <Field>
-                        <FieldLabel for="agent-name">Name</FieldLabel>
-                        <Input id="agent-name" v-model="name" placeholder="e.g. prod-db-01" autocomplete="off"
+                        <FieldLabel for="agent-name">{{ t('agentSheet.name') }}</FieldLabel>
+                        <Input id="agent-name" v-model="name" :placeholder="t('agentSheet.namePlaceholder')" autocomplete="off"
                             :disabled="isSubmitting"
                             :class="nameError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
                         <FieldError v-if="nameError">{{ nameError }}</FieldError>
@@ -137,11 +141,11 @@ function onOpenChange(value: boolean) {
 
                     <SheetFooter class="mt-2 px-0">
                         <Button type="button" variant="outline" :disabled="isSubmitting" @click="onOpenChange(false)">
-                            Cancel
+                            {{ t('common.cancel') }}
                         </Button>
                         <Button type="submit" :disabled="isSubmitting">
                             <Loader2 v-if="isSubmitting" class="size-4 animate-spin" />
-                            {{ isSubmitting ? 'Saving…' : 'Save Changes' }}
+                            {{ isSubmitting ? t('agentSheet.saving') : t('agentSheet.saveChanges') }}
                         </Button>
                     </SheetFooter>
 

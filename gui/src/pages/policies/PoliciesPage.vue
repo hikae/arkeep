@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import {
     Table,
@@ -63,6 +64,7 @@ interface PolicyListResponse {
 
 const router = useRouter()
 const authStore = useAuthStore()
+const { t } = useI18n()
 
 const policies = ref<Policy[]>([])
 const total = ref(0)
@@ -140,7 +142,7 @@ async function fetchPolicies({ quiet = false }: FetchOptions = {}) {
         error.value = null
     } catch (e: any) {
         if (request.stale) return
-        error.value = apiErrorMessage(e, 'Failed to load policies')
+        error.value = apiErrorMessage(e, t('policies.loadFailed'))
     } finally {
         if (!quiet) loading.value = false
     }
@@ -194,7 +196,7 @@ async function triggerPolicy(policy: Policy) {
         const res = await api<ApiResponse<TriggerResponse>>(`/api/v1/policies/${policy.id}/trigger`, { method: 'POST' })
         router.push({ name: 'job-detail', params: { id: res.data.job_id } })
     } catch (e: any) {
-        error.value = apiErrorMessage(e, `Failed to trigger "${policy.name}"`)
+        error.value = apiErrorMessage(e, t('policies.triggerFailed', { name: policy.name }))
     } finally {
         triggeringId.value = null
     }
@@ -221,7 +223,7 @@ async function confirmDelete() {
         }
         await fetchPolicies()
     } catch (e: any) {
-        error.value = apiErrorMessage(e, 'Failed to delete policy')
+        error.value = apiErrorMessage(e, t('policies.deleteFailed'))
     } finally {
         deleteLoading.value = false
     }
@@ -244,16 +246,16 @@ useLiveRefresh(['policies', 'jobs'], fetchPolicies)
         <!-- Header -->
         <div class="flex items-center justify-between">
             <div>
-                <h1 class="text-2xl font-semibold tracking-tight">Policies</h1>
+                <h1 class="text-2xl font-semibold tracking-tight">{{ t('policies.title') }}</h1>
                 <p class="mt-1 text-sm text-muted-foreground">
-                    Manage backup policies — what to back up, when, and where.
+                    {{ t('policies.subtitle') }}
                 </p>
             </div>
             <div class="flex items-center gap-2">
                 <RefreshButton live :loading="loading" :refresh="fetchPolicies" />
                 <Button v-if="authStore.isAdmin" @click="openCreate">
                     <Plus class="w-4 h-4" />
-                    New Policy
+                    {{ t('policies.newPolicy') }}
                 </Button>
             </div>
         </div>
@@ -268,14 +270,14 @@ useLiveRefresh(['policies', 'jobs'], fetchPolicies)
             <Table>
                 <TableHeader>
                     <TableRow>
-                        <SortableTableHead label="Name" :active="sortKey === 'name'" :order="sortOrder"
+                        <SortableTableHead :label="t('policies.colName')" :active="sortKey === 'name'" :order="sortOrder"
                             @toggle="toggleSort('name')" />
-                        <SortableTableHead label="Agent" :active="sortKey === 'agent'" :order="sortOrder"
+                        <SortableTableHead :label="t('policies.colAgent')" :active="sortKey === 'agent'" :order="sortOrder"
                             @toggle="toggleSort('agent')" />
-                        <TableHead>Schedule</TableHead>
-                        <TableHead>Last Run</TableHead>
-                        <TableHead>Recent Runs</TableHead>
-                        <SortableTableHead label="Status" :active="sortKey === 'status'" :order="sortOrder"
+                        <TableHead>{{ t('policies.colSchedule') }}</TableHead>
+                        <TableHead>{{ t('policies.colLastRun') }}</TableHead>
+                        <TableHead>{{ t('policies.colRecentRuns') }}</TableHead>
+                        <SortableTableHead :label="t('policies.colStatus')" :active="sortKey === 'status'" :order="sortOrder"
                             @toggle="toggleSort('status', 'desc')" />
                         <TableHead class="w-13" />
                     </TableRow>
@@ -300,14 +302,14 @@ useLiveRefresh(['policies', 'jobs'], fetchPolicies)
                                         <ShieldCheck class="w-10 h-10 text-muted-foreground" />
                                     </div>
                                     <div>
-                                        <p class="font-medium">No policies configured</p>
+                                        <p class="font-medium">{{ t('policies.empty') }}</p>
                                         <p class="mt-1 text-sm text-muted-foreground">
-                                            Create a policy to start scheduling backups.
+                                            {{ t('policies.emptyDetail') }}
                                         </p>
                                     </div>
                                     <Button v-if="authStore.isAdmin" size="sm" @click="openCreate">
                                         <Plus class="w-4 h-4" />
-                                        New Policy
+                                        {{ t('policies.newPolicy') }}
                                     </Button>
                                 </div>
                             </TableCell>
@@ -320,7 +322,7 @@ useLiveRefresh(['policies', 'jobs'], fetchPolicies)
                             class="cursor-pointer hover:bg-muted/50"
                             tabindex="0"
                             role="link"
-                            :aria-label="`View policy ${policy.name}`"
+                            :aria-label="t('policies.viewPolicy', { name: policy.name })"
                             @click="router.push(`/policies/${policy.id}`)"
                             @keyup.enter="router.push(`/policies/${policy.id}`)">
                             <TableCell class="font-medium">{{ policy.name }}</TableCell>
@@ -333,11 +335,11 @@ useLiveRefresh(['policies', 'jobs'], fetchPolicies)
                                 </span>
                             </TableCell>
                             <TableCell class="text-sm text-muted-foreground whitespace-nowrap" data-testid="last-run">
-                                {{ lastRunDate(policy) ? formatDate(lastRunDate(policy)) : 'Never' }}
+                                {{ lastRunDate(policy) ? formatDate(lastRunDate(policy)) : t('policies.never') }}
                             </TableCell>
                             <!-- Oldest to newest; each dot opens its job instead of the policy -->
                             <TableCell>
-                                <div class="flex items-center gap-1.5" role="list" aria-label="Recent runs">
+                                <div class="flex items-center gap-1.5" role="list" :aria-label="t('policies.recentRuns')">
                                     <template v-for="(run, i) in runHistory(policy)" :key="run?.id ?? `empty-${i}`">
                                         <Tooltip v-if="run">
                                             <TooltipTrigger as-child>
@@ -355,14 +357,14 @@ useLiveRefresh(['policies', 'jobs'], fetchPolicies)
                                                 {{ statusLabel(run.status) }} · {{ formatDate(run.started_at ?? run.created_at) }}
                                             </TooltipContent>
                                         </Tooltip>
-                                        <span v-else role="listitem" aria-label="No run" data-testid="run-dot-empty"
+                                        <span v-else role="listitem" :aria-label="t('policies.noRun')" data-testid="run-dot-empty"
                                             class="block size-2.5 rounded-full border border-dashed border-muted-foreground/40" />
                                     </template>
                                 </div>
                             </TableCell>
                             <TableCell>
                                 <Badge :variant="policy.enabled ? 'default' : 'secondary'">
-                                    {{ policy.enabled ? 'Enabled' : 'Disabled' }}
+                                    {{ policy.enabled ? t('common.enabled') : t('common.disabled') }}
                                 </Badge>
                             </TableCell>
 
@@ -373,7 +375,7 @@ useLiveRefresh(['policies', 'jobs'], fetchPolicies)
                                     <DropdownMenuTrigger as-child>
                                         <Button variant="ghost" size="icon" class="w-8 h-8">
                                             <MoreHorizontal class="w-4 h-4" />
-                                            <span class="sr-only">Open actions</span>
+                                            <span class="sr-only">{{ t('policies.openActions') }}</span>
                                         </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end">
@@ -385,27 +387,27 @@ useLiveRefresh(['policies', 'jobs'], fetchPolicies)
                                                         :disabled="!policy.enabled || triggeringId === policy.id"
                                                         @click="triggerPolicy(policy)">
                                                         <Play class="w-4 h-4 mr-2" />
-                                                        Run Now
+                                                        {{ t('policies.runNow') }}
                                                     </DropdownMenuItem>
                                                 </div>
                                             </TooltipTrigger>
-                                            <TooltipContent side="left">Enable the policy to run a backup.</TooltipContent>
+                                            <TooltipContent side="left">{{ t('policies.enableToRun') }}</TooltipContent>
                                         </Tooltip>
                                         <DropdownMenuSeparator v-if="authStore.isAdmin" />
                                         <DropdownMenuItem @click="openEditSheet(policy)">
                                             <PencilLine class="w-4 h-4 mr-2" />
-                                            Edit
+                                            {{ t('common.edit') }}
                                         </DropdownMenuItem>
                                         <DropdownMenuItem @click="openCloneSheet(policy)">
                                             <Copy class="w-4 h-4 mr-2" />
-                                            Duplicate
+                                            {{ t('policies.duplicate') }}
                                         </DropdownMenuItem>
                                         <DropdownMenuSeparator v-if="authStore.isAdmin" />
                                         <DropdownMenuItem v-if="authStore.isAdmin"
                                             class="text-destructive focus:text-destructive"
                                             @click="openDeleteDialog(policy)">
                                             <Trash2 class="w-4 h-4 mr-2" />
-                                            Delete
+                                            {{ t('common.delete') }}
                                         </DropdownMenuItem>
                                     </DropdownMenuContent>
                                 </DropdownMenu>
@@ -419,15 +421,19 @@ useLiveRefresh(['policies', 'jobs'], fetchPolicies)
         <!-- Pagination -->
         <div v-if="!loading && totalPages > 1" class="flex items-center justify-between text-sm text-muted-foreground">
             <span>
-                Showing {{ offset + 1 }}–{{ Math.min(offset + pageSize, total) }} of {{ total }} policies
+                {{ t('policies.showing', {
+                    from: offset + 1,
+                    to: Math.min(offset + pageSize, total),
+                    total,
+                }) }}
             </span>
             <div class="flex items-center gap-2">
                 <Button variant="outline" size="sm" :disabled="page === 1" @click="goToPage(page - 1)">
-                    Previous
+                    {{ t('agents.previous') }}
                 </Button>
                 <span class="px-2">{{ page }} / {{ totalPages }}</span>
                 <Button variant="outline" size="sm" :disabled="page === totalPages" @click="goToPage(page + 1)">
-                    Next
+                    {{ t('agents.next') }}
                 </Button>
             </div>
         </div>
@@ -441,21 +447,18 @@ useLiveRefresh(['policies', 'jobs'], fetchPolicies)
     <AlertDialog :open="deleteDialogOpen" @update:open="deleteDialogOpen = $event">
         <AlertDialogContent>
             <AlertDialogHeader>
-                <AlertDialogTitle>Delete policy?</AlertDialogTitle>
+                <AlertDialogTitle>{{ t('policies.deleteTitle') }}</AlertDialogTitle>
                 <AlertDialogDescription>
                     <span v-if="policyToDelete">
-                        <strong>{{ policyToDelete.name }}</strong> will be deleted and its stored repository password erased.
-                        All scheduled runs for this policy will be removed.
-                        Its existing snapshots stay listed, and the backup data on the storage is not touched.
-                        This action cannot be undone.
+                        {{ t('policies.deleteBody', { name: policyToDelete.name }) }}
                     </span>
                 </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-                <AlertDialogCancel :disabled="deleteLoading">Cancel</AlertDialogCancel>
+                <AlertDialogCancel :disabled="deleteLoading">{{ t('common.cancel') }}</AlertDialogCancel>
                 <AlertDialogAction variant="destructive"
                     :disabled="deleteLoading" @click="confirmDelete">
-                    {{ deleteLoading ? 'Deleting…' : 'Delete' }}
+                    {{ deleteLoading ? t('policies.deleting') : t('common.delete') }}
                 </AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>

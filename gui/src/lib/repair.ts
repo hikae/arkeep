@@ -2,6 +2,7 @@
 // the request, and which requests change the repository for good. The server
 // validates every request again (shared/repair).
 import { z } from 'zod'
+import { i18n } from '@/i18n'
 import type { RepairAction, RepairParams } from '@/types'
 import {
   REPAIR_HOST_RE,
@@ -14,8 +15,8 @@ import {
 
 export interface RepairActionInfo {
   action: RepairAction
-  label: string
-  description: string
+  labelKey: string
+  descriptionKey: string
   // previewFirst: the action changes the repository for good, so the GUI
   // runs a read-only preview of the same request before offering it.
   previewFirst: boolean
@@ -27,37 +28,32 @@ export interface RepairActionInfo {
 export const repairActions: RepairActionInfo[] = [
   {
     action: 'check',
-    label: 'Check',
-    description:
-      'Check the repository without changing it, to find damaged or missing data. Reading all data verifies every pack file, which can take a long time on a large repository.',
+    labelKey: 'repair.actions.check.label',
+    descriptionKey: 'repair.actions.check.description',
     previewFirst: false,
   },
   {
     action: 'unlock',
-    label: 'Remove stale locks',
-    description:
-      'Remove the locks left by a restic process that was killed or crashed. Locks of operations that are still running are kept.',
+    labelKey: 'repair.actions.unlock.label',
+    descriptionKey: 'repair.actions.unlock.description',
     previewFirst: false,
   },
   {
     action: 'repair-index',
-    label: 'Repair index',
-    description:
-      'Rebuild the index from the pack files actually present, so it no longer refers to lost packs. Reading all packs also rebuilds the entries of damaged ones.',
+    labelKey: 'repair.actions.repairIndex.label',
+    descriptionKey: 'repair.actions.repairIndex.description',
     previewFirst: false,
   },
   {
     action: 'repair-snapshots',
-    label: 'Repair snapshots',
-    description:
-      'Rewrite the snapshots that refer to lost data, leaving out the files that cannot be restored. A dry run lists what would change; applying it saves repaired copies of those snapshots.',
+    labelKey: 'repair.actions.repairSnapshots.label',
+    descriptionKey: 'repair.actions.repairSnapshots.description',
     previewFirst: true,
   },
   {
     action: 'repair-packs',
-    label: 'Repair packs',
-    description:
-      'Salvage what can still be read from damaged pack files and replace them. The preview lists the files and snapshots that use those packs.',
+    labelKey: 'repair.actions.repairPacks.label',
+    descriptionKey: 'repair.actions.repairPacks.description',
     previewFirst: true,
   },
 ]
@@ -90,15 +86,18 @@ export function emptyRepairForm(action: RepairAction = 'check'): RepairForm {
 
 // listField validates a list field as shared/repair does: at most limit
 // values, each matching re.
-function listField(what: string, limit: number, re: RegExp, rule: string) {
+function listField(whatKey: string, limit: number, re: RegExp, ruleKey: string) {
   return z.string().superRefine((text, ctx) => {
+    const { t } = i18n.global
     const values = parseList(text)
     if (values.length > limit) {
-      ctx.addIssue({ code: 'custom', message: `At most ${limit} ${what}s per request` })
+      ctx.addIssue({ code: 'custom', message: t('repair.validation.tooMany', { limit, what: t(whatKey) }) })
       return
     }
     const bad = values.find((v) => !re.test(v))
-    if (bad !== undefined) ctx.addIssue({ code: 'custom', message: `Invalid ${what} "${bad}": ${rule}` })
+    if (bad !== undefined) {
+      ctx.addIssue({ code: 'custom', message: t('repair.validation.invalid', { what: t(whatKey), value: bad, rule: t(ruleKey) }) })
+    }
   })
 }
 
@@ -111,14 +110,14 @@ export const repairFormSchema = z
     readAllPacks: z.boolean(),
     readData: z.boolean(),
     forget: z.boolean(),
-    hosts: listField('host', REPAIR_MAX_FILTERS, REPAIR_HOST_RE, "letters, digits, '.', '_' and '-', starting with a letter or digit"),
-    tags: listField('tag', REPAIR_MAX_FILTERS, REPAIR_TAG_RE, "letters, digits and '.', '_', ':', '@', '+', '=', '-', starting with a letter or digit"),
-    snapshotIds: listField('snapshot ID', REPAIR_MAX_IDS, REPAIR_SNAPSHOT_ID_RE, '8 to 64 lowercase hexadecimal characters'),
-    packIds: listField('pack ID', REPAIR_MAX_IDS, REPAIR_PACK_ID_RE, '64 lowercase hexadecimal characters'),
+    hosts: listField('repair.validation.what.host', REPAIR_MAX_FILTERS, REPAIR_HOST_RE, 'repair.validation.rule.host'),
+    tags: listField('repair.validation.what.tag', REPAIR_MAX_FILTERS, REPAIR_TAG_RE, 'repair.validation.rule.tag'),
+    snapshotIds: listField('repair.validation.what.snapshotId', REPAIR_MAX_IDS, REPAIR_SNAPSHOT_ID_RE, 'repair.validation.rule.snapshotId'),
+    packIds: listField('repair.validation.what.packId', REPAIR_MAX_IDS, REPAIR_PACK_ID_RE, 'repair.validation.rule.packId'),
   })
   .superRefine((form, ctx) => {
     if ((form.action === 'repair-packs' || form.action === 'find-packs') && parseList(form.packIds).length === 0) {
-      ctx.addIssue({ code: 'custom', path: ['packIds'], message: 'Enter at least one pack ID' })
+      ctx.addIssue({ code: 'custom', path: ['packIds'], message: i18n.global.t('repair.validation.packIdRequired') })
     }
   })
 
@@ -168,13 +167,12 @@ export function previewKey(form: RepairForm): string {
 // changeSummary says, for the confirmation dialog, what applying the request
 // changes in the repository.
 export function changeSummary(p: RepairParams): string {
+  const { t } = i18n.global
   switch (p.action) {
     case 'repair-snapshots':
-      return p.forget
-        ? 'The snapshots that refer to lost data are replaced by repaired copies without the files that cannot be restored, and the original snapshots are removed. Those files cannot be restored from this repository afterwards.'
-        : 'Repaired copies of the snapshots that refer to lost data are added, without the files that cannot be restored. The original snapshots are kept.'
+      return p.forget ? t('repair.summary.snapshotsForget') : t('repair.summary.snapshotsKeep')
     case 'repair-packs':
-      return 'The damaged pack files are replaced by new ones holding the data that could still be read. Data that could not be read is gone for good: run Repair snapshots afterwards so the snapshots stop referring to it.'
+      return t('repair.summary.packs')
     default:
       return ''
   }
@@ -182,13 +180,16 @@ export function changeSummary(p: RepairParams): string {
 
 // formatParams lists a repair's parameters on the job page.
 export function formatParams(p: RepairParams): string[] {
-  const out: string[] = [`Action: ${p.action}`]
-  if (p.action === 'repair-snapshots') out.push(p.apply ? (p.forget ? 'Applied, originals removed (--forget)' : 'Applied') : 'Dry run')
-  if (p.read_all_packs) out.push('Read all packs')
-  if (p.read_data) out.push('Read all data')
-  if (p.hosts?.length) out.push(`Hosts: ${p.hosts.join(', ')}`)
-  if (p.tags?.length) out.push(`Tags: ${p.tags.join(', ')}`)
-  if (p.snapshot_ids?.length) out.push(`Snapshots: ${p.snapshot_ids.join(', ')}`)
-  if (p.pack_ids?.length) out.push(`Packs: ${p.pack_ids.join(', ')}`)
+  const { t } = i18n.global
+  const out: string[] = [t('repair.params.action', { action: p.action })]
+  if (p.action === 'repair-snapshots') {
+    out.push(p.apply ? (p.forget ? t('repair.params.appliedForget') : t('repair.params.applied')) : t('repair.params.dryRun'))
+  }
+  if (p.read_all_packs) out.push(t('repair.params.readAllPacks'))
+  if (p.read_data) out.push(t('repair.params.readAllData'))
+  if (p.hosts?.length) out.push(t('repair.params.hosts', { value: p.hosts.join(', ') }))
+  if (p.tags?.length) out.push(t('repair.params.tags', { value: p.tags.join(', ') }))
+  if (p.snapshot_ids?.length) out.push(t('repair.params.snapshots', { value: p.snapshot_ids.join(', ') }))
+  if (p.pack_ids?.length) out.push(t('repair.params.packs', { value: p.pack_ids.join(', ') }))
   return out
 }

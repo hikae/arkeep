@@ -1,5 +1,6 @@
 import type { Component } from 'vue'
 import { Bell, Hash, Link, Smartphone, Users } from '@lucide/vue'
+import { i18n } from '@/i18n'
 
 // Notification provider types, mirroring providerTypes in
 // server/internal/notification/provider.go: the server builds the shoutrrr
@@ -7,23 +8,26 @@ import { Bell, Hash, Link, Smartphone, Users } from '@lucide/vue'
 
 export interface ProviderFieldDef {
   key: string
-  label: string
+  labelKey: string
   secret?: boolean
   required?: boolean
+  // Literal example values (URLs, tokens) are not translated; placeholderKey
+  // holds the message key of the prose ones.
   placeholder?: string
-  help?: string
+  placeholderKey?: string
+  helpKey?: string
 }
 
 export interface ProviderTypeDef {
   type: string
-  label: string
+  labelKey: string
   // Brand logo path (24×24 viewBox) or, for brands simple-icons does not
   // carry, a generic icon.
   iconPath?: string
   icon?: Component
   fields: ProviderFieldDef[]
   // Whether the service takes a priority, and the values it accepts.
-  priorityHelp?: string
+  priorityHelpKey?: string
 }
 
 // Brand logo paths from simple-icons 16.36.0 (https://simpleicons.org, CC0-1.0).
@@ -37,89 +41,89 @@ const LOGOS = {
   mattermost: 'M12.081 0C7.048-.034 2.339 3.125.637 8.153c-2.125 6.276 1.24 13.086 7.516 15.21 6.276 2.125 13.086-1.24 15.21-7.516 1.727-5.1-.172-10.552-4.311-13.557l.126 2.547c2.065 2.282 2.88 5.512 1.852 8.549-1.534 4.532-6.594 6.915-11.3 5.321-4.708-1.593-7.28-6.559-5.745-11.092 1.031-3.046 3.655-5.121 6.694-5.67l1.642-1.94A4.87 4.87 0 0 0 12.08 0zm3.528 1.094a.284.284 0 0 0-.123.024l-.004.001a.33.33 0 0 0-.109.071c-.145.142-.657.828-.657.828L13.6 3.4l-1.3 1.585-2.232 2.776s-1.024 1.278-.798 2.851c.226 1.574 1.396 2.34 2.304 2.648.907.307 2.302.408 3.438-.704 1.135-1.112 1.098-2.75 1.098-2.75l-.087-3.56-.07-2.05-.047-1.775s.01-.856-.02-1.057a.33.33 0 0 0-.035-.107l-.006-.012-.007-.011a.277.277 0 0 0-.229-.14z',
 }
 
-const webhookField = (placeholder: string, help: string): ProviderFieldDef => ({
-  key: 'webhook_url', label: 'Webhook URL', secret: true, required: true, placeholder, help,
+const webhookField = (placeholder: string, helpKey: string): ProviderFieldDef => ({
+  key: 'webhook_url', labelKey: 'notificationProviders.fields.webhookUrl', secret: true, required: true, placeholder, helpKey,
 })
 
 const TYPES: ProviderTypeDef[] = [
   {
-    type: 'gotify', label: 'Gotify', icon: Bell,
+    type: 'gotify', labelKey: 'notificationProviders.types.gotify', icon: Bell,
     fields: [
-      { key: 'url', label: 'Server URL', required: true, placeholder: 'https://gotify.example.com',
-        help: 'Include the base path if Gotify is behind a reverse proxy. http:// disables TLS.' },
-      { key: 'token', label: 'Application token', secret: true, required: true,
-        help: 'Create an application in Gotify and copy its token.' },
+      { key: 'url', labelKey: 'notificationProviders.fields.serverUrl', required: true, placeholder: 'https://gotify.example.com',
+        helpKey: 'notificationProviders.help.gotifyUrl' },
+      { key: 'token', labelKey: 'notificationProviders.fields.applicationToken', secret: true, required: true,
+        helpKey: 'notificationProviders.help.gotifyToken' },
     ],
-    priorityHelp: '0 to 10. 0 is silent on Android, 8 and above pops up with sound and vibration.',
+    priorityHelpKey: 'notificationProviders.priorityHelp.gotify',
   },
   {
-    type: 'ntfy', label: 'ntfy', iconPath: LOGOS.ntfy,
+    type: 'ntfy', labelKey: 'notificationProviders.types.ntfy', iconPath: LOGOS.ntfy,
     fields: [
-      { key: 'url', label: 'Server URL', required: true, placeholder: 'https://ntfy.sh',
-        help: 'https://ntfy.sh for the public server, or your own.' },
-      { key: 'topic', label: 'Topic', secret: true, required: true, placeholder: 'arkeep-backups',
-        help: 'On a public server, anyone who knows the topic can read it: pick one hard to guess.' },
-      { key: 'token', label: 'Access token', secret: true, help: 'Only for a server or topic that requires one.' },
+      { key: 'url', labelKey: 'notificationProviders.fields.serverUrl', required: true, placeholder: 'https://ntfy.sh',
+        helpKey: 'notificationProviders.help.ntfyUrl' },
+      { key: 'topic', labelKey: 'notificationProviders.fields.topic', secret: true, required: true, placeholder: 'arkeep-backups',
+        helpKey: 'notificationProviders.help.ntfyTopic' },
+      { key: 'token', labelKey: 'notificationProviders.fields.accessToken', secret: true, helpKey: 'notificationProviders.help.ntfyToken' },
     ],
-    priorityHelp: '1 (min) to 5 (max), or min, low, default, high, max.',
+    priorityHelpKey: 'notificationProviders.priorityHelp.ntfy',
   },
   {
-    type: 'pushover', label: 'Pushover', icon: Smartphone,
+    type: 'pushover', labelKey: 'notificationProviders.types.pushover', icon: Smartphone,
     fields: [
-      { key: 'user_key', label: 'User key', secret: true, required: true, help: 'Shown on your Pushover dashboard.' },
-      { key: 'api_token', label: 'Application API token', secret: true, required: true },
-      { key: 'devices', label: 'Devices', placeholder: 'phone, tablet',
-        help: 'Comma-separated. Leave empty to notify all your devices.' },
+      { key: 'user_key', labelKey: 'notificationProviders.fields.userKey', secret: true, required: true, helpKey: 'notificationProviders.help.pushoverUserKey' },
+      { key: 'api_token', labelKey: 'notificationProviders.fields.applicationApiToken', secret: true, required: true },
+      { key: 'devices', labelKey: 'notificationProviders.fields.devices', placeholderKey: 'notificationProviders.placeholders.devices',
+        helpKey: 'notificationProviders.help.pushoverDevices' },
     ],
-    priorityHelp: '-2 (no alert) to 1 (high). 2 (emergency) repeats until acknowledged.',
+    priorityHelpKey: 'notificationProviders.priorityHelp.pushover',
   },
   {
-    type: 'telegram', label: 'Telegram', iconPath: LOGOS.telegram,
+    type: 'telegram', labelKey: 'notificationProviders.types.telegram', iconPath: LOGOS.telegram,
     fields: [
-      { key: 'bot_token', label: 'Bot token', secret: true, required: true, placeholder: '123456789:ABC…',
-        help: 'Create a bot with @BotFather and add it to the chats.' },
-      { key: 'chats', label: 'Chat IDs', required: true, placeholder: '123456789, @mychannel',
-        help: 'Comma-separated chat IDs or @channel names.' },
-    ],
-  },
-  {
-    type: 'discord', label: 'Discord', iconPath: LOGOS.discord,
-    fields: [webhookField('https://discord.com/api/webhooks/…', 'Channel settings → Integrations → Webhooks → Copy Webhook URL.')],
-  },
-  {
-    type: 'matrix', label: 'Matrix', iconPath: LOGOS.matrix,
-    fields: [
-      { key: 'url', label: 'Homeserver URL', required: true, placeholder: 'https://matrix.example.com' },
-      { key: 'user', label: 'User', required: true, placeholder: 'arkeep-bot' },
-      { key: 'password', label: 'Password', secret: true, required: true },
-      { key: 'rooms', label: 'Rooms', placeholder: '!roomid:example.com, #alias:example.com',
-        help: 'Comma-separated. Leave empty to post to every room the user has joined.' },
+      { key: 'bot_token', labelKey: 'notificationProviders.fields.botToken', secret: true, required: true, placeholder: '123456789:ABC…',
+        helpKey: 'notificationProviders.help.telegramBotToken' },
+      { key: 'chats', labelKey: 'notificationProviders.fields.chatIds', required: true, placeholder: '123456789, @mychannel',
+        helpKey: 'notificationProviders.help.telegramChats' },
     ],
   },
   {
-    type: 'slack', label: 'Slack', icon: Hash,
-    fields: [webhookField('https://hooks.slack.com/services/…', 'The URL of an incoming webhook of your Slack app.')],
+    type: 'discord', labelKey: 'notificationProviders.types.discord', iconPath: LOGOS.discord,
+    fields: [webhookField('https://discord.com/api/webhooks/…', 'notificationProviders.help.discordWebhook')],
   },
   {
-    type: 'teams', label: 'Microsoft Teams', icon: Users,
+    type: 'matrix', labelKey: 'notificationProviders.types.matrix', iconPath: LOGOS.matrix,
+    fields: [
+      { key: 'url', labelKey: 'notificationProviders.fields.homeserverUrl', required: true, placeholder: 'https://matrix.example.com' },
+      { key: 'user', labelKey: 'notificationProviders.fields.user', required: true, placeholder: 'arkeep-bot' },
+      { key: 'password', labelKey: 'notificationProviders.fields.password', secret: true, required: true },
+      { key: 'rooms', labelKey: 'notificationProviders.fields.rooms', placeholder: '!roomid:example.com, #alias:example.com',
+        helpKey: 'notificationProviders.help.matrixRooms' },
+    ],
+  },
+  {
+    type: 'slack', labelKey: 'notificationProviders.types.slack', icon: Hash,
+    fields: [webhookField('https://hooks.slack.com/services/…', 'notificationProviders.help.slackWebhook')],
+  },
+  {
+    type: 'teams', labelKey: 'notificationProviders.types.teams', icon: Users,
     fields: [webhookField('https://….environment.api.powerplatform.com/…',
-      'The URL of a Workflows (Power Automate) webhook: "Post to a channel when a webhook request is received".')],
+      'notificationProviders.help.teamsWebhook')],
   },
   {
-    type: 'googlechat', label: 'Google Chat', iconPath: LOGOS.googlechat,
-    fields: [webhookField('https://chat.googleapis.com/v1/spaces/…', 'Space → Apps & integrations → Webhooks.')],
+    type: 'googlechat', labelKey: 'notificationProviders.types.googlechat', iconPath: LOGOS.googlechat,
+    fields: [webhookField('https://chat.googleapis.com/v1/spaces/…', 'notificationProviders.help.googlechatWebhook')],
   },
   {
-    type: 'mattermost', label: 'Mattermost', iconPath: LOGOS.mattermost,
-    fields: [webhookField('https://mattermost.example.com/hooks/…', 'Integrations → Incoming Webhooks.')],
+    type: 'mattermost', labelKey: 'notificationProviders.types.mattermost', iconPath: LOGOS.mattermost,
+    fields: [webhookField('https://mattermost.example.com/hooks/…', 'notificationProviders.help.mattermostWebhook')],
   },
   {
-    type: 'custom', label: 'Other (shoutrrr URL)', icon: Link,
+    type: 'custom', labelKey: 'notificationProviders.types.custom', icon: Link,
     fields: [
-      { key: 'url', label: 'Shoutrrr URL', secret: true, required: true, placeholder: 'bark://devicekey@api.day.app',
-        help: 'Any service supported by shoutrrr, in its URL format: see github.com/nicholas-fedor/shoutrrr.' },
+      { key: 'url', labelKey: 'notificationProviders.fields.shoutrrrUrl', secret: true, required: true, placeholder: 'bark://devicekey@api.day.app',
+        helpKey: 'notificationProviders.help.shoutrrrUrl' },
     ],
-    priorityHelp: 'Only for services that take a priority; the format depends on the service.',
+    priorityHelpKey: 'notificationProviders.priorityHelp.custom',
   },
 ]
 
@@ -127,7 +131,7 @@ const TYPES: ProviderTypeDef[] = [
 // shoutrrr URL last.
 export const PROVIDER_TYPES: ProviderTypeDef[] = [...TYPES].sort((a, b) =>
   Number(a.type === 'custom') - Number(b.type === 'custom')
-  || a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }))
+  || i18n.global.t(a.labelKey).localeCompare(i18n.global.t(b.labelKey), undefined, { sensitivity: 'base' }))
 
 export function providerTypeDef(type: string): ProviderTypeDef | undefined {
   return PROVIDER_TYPES.find((t) => t.type === type)

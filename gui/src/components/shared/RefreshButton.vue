@@ -5,10 +5,13 @@
 // live marks a page that updates itself from the server's change events
 // (useLiveRefresh): when those have been unavailable for a while, the button
 // says so, since the page then only changes when refreshed by hand.
+import { useI18n } from 'vue-i18n'
 import { RefreshCw, WifiOff } from '@lucide/vue'
 import { Button } from '@/components/ui/button'
 import { liveUpdatesUnavailable } from '@/services/websocket'
 import type { FetchOptions } from '@/composables/useLiveRefresh'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   refresh: (options: FetchOptions) => unknown
@@ -22,11 +25,11 @@ const props = defineProps<{
   <div class="inline-flex shrink-0 items-center gap-2">
     <span v-if="props.live && liveUpdatesUnavailable" data-test="live-updates-unavailable"
       class="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
-      title="The live connection to the server keeps failing, so this page no longer updates by itself: use the refresh button. If it lasts, check that your reverse proxy passes WebSocket connections (/api/v1/ws).">
+      :title="t('common.liveUnavailableTitle')">
       <WifiOff class="w-3.5 h-3.5" />
-      Live updates unavailable
+      {{ t('common.liveUnavailable') }}
     </span>
-    <Button variant="outline" size="icon" aria-label="Refresh" :disabled="props.loading"
+    <Button variant="outline" size="icon" :aria-label="t('common.refresh')" :disabled="props.loading"
       @click="props.refresh({})">
       <RefreshCw class="w-4 h-4" :class="{ 'animate-spin': props.loading }" />
     </Button>

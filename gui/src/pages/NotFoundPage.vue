@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, Home, Moon, Sun } from '@lucide/vue'
 import { useTheme } from '@/composables/useTheme'
+import LocaleToggle from '@/components/shared/LocaleToggle.vue'
 
 const router = useRouter()
 const { isDark, cycle, modeLabel } = useTheme()
+const { t } = useI18n()
 </script>
 
 <template>
@@ -22,31 +25,34 @@ const { isDark, cycle, modeLabel } = useTheme()
             maskImage: 'radial-gradient(ellipse 60% 60% at 50% 50%, #000 30%, transparent 70%)',
         }" />
 
-        <!-- Theme toggle -->
-        <Button variant="ghost" size="icon"
-            class="absolute z-10 top-4 right-4 text-muted-foreground hover:text-foreground" :aria-label="modeLabel"
-            @click="cycle()">
-            <Sun v-if="isDark" class="size-4" />
-            <Moon v-else class="size-4" />
-        </Button>
+        <!-- Theme and language toggles -->
+        <div class="absolute z-10 top-4 right-4 flex items-center gap-2">
+            <LocaleToggle />
+            <Button variant="ghost" size="icon"
+                class="text-muted-foreground hover:text-foreground" :aria-label="modeLabel"
+                @click="cycle()">
+                <Sun v-if="isDark" class="size-4" />
+                <Moon v-else class="size-4" />
+            </Button>
+        </div>
 
         <!-- Content -->
         <div class="relative z-10 flex flex-col items-center gap-6 text-center">
             <p class="text-9xl font-medium uppercase tracking-widest text-primary">404</p>
             <div class="flex flex-col gap-2">
-                <h1 class="text-4xl font-bold tracking-tight">Page not found</h1>
+                <h1 class="text-4xl font-bold tracking-tight">{{ t('errors.pageNotFoundTitle') }}</h1>
                 <p class="text-lg text-muted-foreground max-w-xs text-balance">
-                    The page you're looking for doesn't exist or has been moved.
+                    {{ t('errors.pageNotFoundBody') }}
                 </p>
             </div>
             <div class="flex items-center gap-3">
                 <Button variant="outline" class="bg-background" @click="router.back()">
                     <ArrowLeft class="mr-2 size-4" />
-                    Go back
+                    {{ t('errors.goBack') }}
                 </Button>
                 <Button @click="router.push('/dashboard')">
                     <Home class="mr-2 size-4" />
-                    Dashboard
+                    {{ t('nav.dashboard') }}
                 </Button>
             </div>
         </div>
@@ -54,6 +60,6 @@ const { isDark, cycle, modeLabel } = useTheme()
 
     <!-- Footer — outside flex wrapper so it sits at true bottom -->
     <p class="fixed bottom-0 left-0 right-0 text-center text-xs text-muted-foreground mb-6">
-        Arkeep — open source backup management
+        {{ t('auth.footer') }}
     </p>
 </template>

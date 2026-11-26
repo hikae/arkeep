@@ -3,6 +3,7 @@
 // create and revoke their own tokens on their profile; an admin can revoke any
 // of them here, for instance when a program's host is compromised.
 import { onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -14,6 +15,8 @@ import { AlertCircle, KeyRound } from '@lucide/vue'
 import { api, apiErrorMessage } from '@/services/api'
 import { formatDate } from '@/lib/jobUtils'
 import type { ApiResponse, ApiToken } from '@/types'
+
+const { t } = useI18n()
 
 const tokens = ref<ApiToken[]>([])
 const loading = ref(true)
@@ -27,7 +30,7 @@ async function fetchTokens(): Promise<void> {
         const res = await api<ApiResponse<ApiToken[]>>('/api/v1/api-tokens')
         tokens.value = res.data
     } catch (e: any) {
-        loadError.value = apiErrorMessage(e, 'Failed to load API tokens.')
+        loadError.value = apiErrorMessage(e, t('apiTokens.loadFailed'))
     } finally {
         loading.value = false
     }
@@ -48,11 +51,9 @@ function isExpired(t: ApiToken): boolean {
 <template>
     <div class="flex flex-col gap-6">
         <div>
-            <h2 class="text-lg font-semibold">API Tokens</h2>
+            <h2 class="text-lg font-semibold">{{ t('apiTokens.title') }}</h2>
             <p class="mt-1 text-sm text-muted-foreground">
-                Read-only tokens that users created on their profile for programs that read Arkeep, such as a
-                Home Assistant integration. A token sees what the user role sees and never changes anything.
-                Revoking one stops it at once.
+                {{ t('apiTokens.page.description') }}
             </p>
         </div>
 
@@ -66,12 +67,12 @@ function isExpired(t: ApiToken): boolean {
             <Table>
                 <TableHeader>
                     <TableRow>
-                        <TableHead>User</TableHead>
-                        <TableHead>Name</TableHead>
-                        <TableHead>Token</TableHead>
-                        <TableHead>Created</TableHead>
-                        <TableHead>Last used</TableHead>
-                        <TableHead>Expires</TableHead>
+                        <TableHead>{{ t('apiTokens.page.colUser') }}</TableHead>
+                        <TableHead>{{ t('common.name') }}</TableHead>
+                        <TableHead>{{ t('apiTokens.page.colToken') }}</TableHead>
+                        <TableHead>{{ t('apiTokens.colCreated') }}</TableHead>
+                        <TableHead>{{ t('apiTokens.colLastUsed') }}</TableHead>
+                        <TableHead>{{ t('apiTokens.colExpires') }}</TableHead>
                         <TableHead class="w-24"></TableHead>
                     </TableRow>
                 </TableHeader>
@@ -89,25 +90,25 @@ function isExpired(t: ApiToken): boolean {
                                 <div class="p-4 rounded-full bg-muted">
                                     <KeyRound class="w-8 h-8 text-muted-foreground" />
                                 </div>
-                                <p class="text-sm text-muted-foreground">No API tokens.</p>
+                                <p class="text-sm text-muted-foreground">{{ t('apiTokens.page.empty') }}</p>
                             </div>
                         </TableCell>
                     </TableRow>
                     <template v-else>
-                        <TableRow v-for="t in tokens" :key="t.id">
-                            <TableCell class="text-sm">{{ t.user_email }}</TableCell>
-                            <TableCell class="text-sm font-medium">{{ t.name }}</TableCell>
-                            <TableCell><code class="text-xs">{{ t.hint }}…</code></TableCell>
-                            <TableCell class="text-sm text-muted-foreground whitespace-nowrap">{{ formatDate(t.created_at) }}</TableCell>
+                        <TableRow v-for="token in tokens" :key="token.id">
+                            <TableCell class="text-sm">{{ token.user_email }}</TableCell>
+                            <TableCell class="text-sm font-medium">{{ token.name }}</TableCell>
+                            <TableCell><code class="text-xs">{{ token.hint }}…</code></TableCell>
+                            <TableCell class="text-sm text-muted-foreground whitespace-nowrap">{{ formatDate(token.created_at) }}</TableCell>
                             <TableCell class="text-sm text-muted-foreground whitespace-nowrap">
-                                {{ t.last_used_at ? formatDate(t.last_used_at) : 'Never' }}
+                                {{ token.last_used_at ? formatDate(token.last_used_at) : t('apiTokens.never') }}
                             </TableCell>
                             <TableCell class="text-sm whitespace-nowrap"
-                                :class="isExpired(t) ? 'text-destructive' : 'text-muted-foreground'">
-                                {{ t.expires_at ? (isExpired(t) ? 'Expired ' : '') + formatDate(t.expires_at) : 'Never' }}
+                                :class="isExpired(token) ? 'text-destructive' : 'text-muted-foreground'">
+                                {{ token.expires_at ? (isExpired(token) ? t('apiTokens.expiredPrefix') : '') + formatDate(token.expires_at) : t('apiTokens.never') }}
                             </TableCell>
                             <TableCell class="text-right">
-                                <Button variant="outline" size="sm" @click="revoking = t">Revoke</Button>
+                                <Button variant="outline" size="sm" @click="revoking = token">{{ t('apiTokens.revoke') }}</Button>
                             </TableCell>
                         </TableRow>
                     </template>

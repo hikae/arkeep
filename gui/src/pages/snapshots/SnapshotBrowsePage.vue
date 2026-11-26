@@ -9,6 +9,7 @@
 
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { ArchiveRestore, ArrowLeft, Download, Loader2, RefreshCw } from '@lucide/vue'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AsyncCombobox } from '@/components/ui/async-combobox'
@@ -27,6 +28,7 @@ defineOptions({ inheritAttrs: false })
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const { t } = useI18n()
 const snapshotId = route.params.id as string
 
 const snapshot = ref<Snapshot | null>(null)
@@ -58,7 +60,7 @@ async function fetchSnapshot() {
         // to browse with, only a full restore with re-entered credentials.
         if (!res.data.destination_deleted) await browseRoot()
     } catch (e: any) {
-        error.value = apiErrorMessage(e, 'Failed to load snapshot.')
+        error.value = apiErrorMessage(e, t('snapshotBrowse.loadFailed'))
     } finally {
         loading.value = false
     }
@@ -82,7 +84,7 @@ async function browseRoot() {
         selectedPaths.value = []
     } catch (e: any) {
         entries.value = []
-        browseError.value = apiErrorMessage(e, 'Failed to browse snapshot.')
+        browseError.value = apiErrorMessage(e, t('snapshotBrowse.browseFailed'))
     } finally {
         browsing.value = false
     }
@@ -107,7 +109,7 @@ async function download(entry: SnapshotFileEntry | null) {
         a.download = ''
         a.click()
     } catch (e: any) {
-        downloadError.value = apiErrorMessage(e, 'Failed to start the download.')
+        downloadError.value = apiErrorMessage(e, t('snapshotBrowse.downloadFailed'))
     }
 }
 
@@ -120,7 +122,7 @@ onMounted(fetchSnapshot)
         <!-- ── Header ─────────────────────────────────────────────────────── -->
         <div class="flex items-start justify-between gap-4">
             <div class="flex items-center gap-3">
-                <Button variant="ghost" size="icon" @click="router.push('/snapshots')">
+                <Button variant="ghost" size="icon" :aria-label="t('snapshotBrowse.backToSnapshots')" @click="router.push('/snapshots')">
                     <ArrowLeft class="w-4 h-4" />
                 </Button>
                 <div>
@@ -131,10 +133,10 @@ onMounted(fetchSnapshot)
                     <template v-else-if="snapshot">
                         <div class="flex items-center gap-2.5 flex-wrap">
                             <h1 class="text-2xl font-semibold tracking-tight">
-                                Snapshot <span class="font-mono">{{ snapshot.restic_snapshot_id.slice(0, 8) }}</span>
+                                {{ t('snapshotBrowse.title', { id: snapshot.restic_snapshot_id.slice(0, 8) }) }}
                             </h1>
-                            <Badge v-if="snapshot.is_imported" variant="outline">Imported</Badge>
-                            <Badge v-if="snapshot.destination_deleted" variant="outline">Destination deleted</Badge>
+                            <Badge v-if="snapshot.is_imported" variant="outline">{{ t('snapshotBrowse.imported') }}</Badge>
+                            <Badge v-if="snapshot.destination_deleted" variant="outline">{{ t('snapshotBrowse.destinationDeleted') }}</Badge>
                         </div>
                         <p class="mt-0.5 text-sm text-muted-foreground">
                             <span v-if="snapshot.policy_name">{{ snapshot.policy_name }} · </span>
@@ -148,12 +150,14 @@ onMounted(fetchSnapshot)
             <div v-if="!loading && snapshot && authStore.isAdmin && !snapshot.destination_deleted" class="flex items-center gap-2">
                 <Button variant="outline" size="sm" :disabled="!agentId || browsing" @click="download(null)">
                     <Download class="w-4 h-4 mr-1.5" />
-                    Download all (ZIP)
+                    {{ t('snapshotBrowse.downloadAllZip') }}
                 </Button>
                 <Button variant="outline" size="sm" :disabled="selectedPaths.length === 0"
                     @click="restoreOpen = true">
                     <ArchiveRestore class="w-4 h-4 mr-1.5" />
-                    Restore selected{{ selectedPaths.length > 0 ? ` (${selectedPaths.length})` : '' }}
+                    {{ selectedPaths.length > 0
+                        ? t('snapshotBrowse.restoreSelectedCount', { n: selectedPaths.length })
+                        : t('snapshotBrowse.restoreSelected') }}
                 </Button>
             </div>
         </div>
@@ -165,15 +169,13 @@ onMounted(fetchSnapshot)
         <!-- ── Deleted destination ─────────────────────────────────────── -->
         <div v-if="!loading && snapshot?.destination_deleted"
             class="flex flex-col items-center gap-3 rounded-md border p-10 text-center">
-            <p class="font-medium">The destination of this snapshot was deleted</p>
+            <p class="font-medium">{{ t('snapshotBrowse.destDeletedTitle') }}</p>
             <p class="max-w-lg text-sm text-muted-foreground">
-                Arkeep erased the stored credentials of <span class="font-medium">{{ snapshot.destination_name }}</span>,
-                so it can no longer browse or download files from this snapshot. The backup data is still on the
-                storage: you can restore the whole snapshot by entering the destination's credentials again.
+                {{ t('snapshotBrowse.destDeletedBody', { name: snapshot.destination_name }) }}
             </p>
             <Button v-if="authStore.isAdmin" size="sm" @click="restoreOpen = true">
                 <ArchiveRestore class="w-4 h-4 mr-1.5" />
-                Restore snapshot
+                {{ t('snapshotBrowse.restoreSnapshot') }}
             </Button>
         </div>
 
@@ -181,12 +183,12 @@ onMounted(fetchSnapshot)
             <!-- ── Agent ──────────────────────────────────────────────────── -->
             <div class="flex flex-wrap items-end gap-2">
                 <div class="w-72">
-                    <p class="text-xs text-muted-foreground uppercase tracking-wide mb-1">Read with agent</p>
+                    <p class="text-xs text-muted-foreground uppercase tracking-wide mb-1">{{ t('snapshotBrowse.readWithAgent') }}</p>
                     <AsyncCombobox
                         endpoint="/api/v1/agents?status=online"
                         :model-value="agentId"
                         :initial-label="agentName"
-                        placeholder="Select an agent…"
+                        :placeholder="t('snapshotBrowse.selectAgent')"
                         @update:model-value="agentId = $event"
                         @update:item="onAgentSelected"
                     />
@@ -203,14 +205,14 @@ onMounted(fetchSnapshot)
             <!-- ── Files ──────────────────────────────────────────────────── -->
             <div class="border rounded-md">
                 <p v-if="!agentId" class="p-6 text-sm text-center text-muted-foreground">
-                    Select an online agent that can reach this snapshot's repository to browse its files.
+                    {{ t('snapshotBrowse.selectAgentHint') }}
                 </p>
                 <div v-else-if="browsing" class="flex items-center justify-center gap-2 p-6 text-sm text-muted-foreground">
                     <Loader2 class="w-4 h-4 animate-spin" />
-                    Opening the repository… this can take a while on a large remote repository.
+                    {{ t('snapshotBrowse.openingRepo') }}
                 </div>
                 <p v-else-if="entries.length === 0 && !browseError" class="p-6 text-sm text-center text-muted-foreground">
-                    This snapshot is empty.
+                    {{ t('snapshotBrowse.empty') }}
                 </p>
                 <SnapshotFileTree
                     v-else-if="entries.length > 0"

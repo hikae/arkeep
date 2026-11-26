@@ -6,7 +6,12 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [vue(), tailwindcss(), VitePWA({
+  plugins: [vue({
+      // Public assets are referenced with absolute URLs (/icons/…, /login-bg.mp4).
+      // Leaving them untouched keeps Vite from resolving them through the module
+      // graph, which fails under Vitest on Windows.
+      template: { transformAssetUrls: false },
+    }), tailwindcss(), VitePWA({
       // generateSW lets vite-plugin-pwa (via workbox-build) generate the
       // service worker automatically. No custom sw.ts needed, no extra
       // Workbox packages to install beyond workbox-window.

@@ -32,6 +32,7 @@ import RefreshButton from '@/components/shared/RefreshButton.vue'
 import { useLiveRefresh, type FetchOptions } from '@/composables/useLiveRefresh'
 import { requestOrder } from '@/lib/requestOrder'
 import { api, apiErrorMessage } from '@/services/api'
+import { useI18n } from 'vue-i18n'
 import { wsClient } from '@/services/websocket'
 import type { Agent, AgentStatus, ApiResponse } from '@/types'
 import AgentSheet from '@/components/agents/AgentSheet.vue'
@@ -55,6 +56,7 @@ interface AgentListResponse {
 const router = useRouter()
 const updateStore = useUpdateStore()
 const authStore = useAuthStore()
+const { t, locale } = useI18n()
 
 const agents = ref<Agent[]>([])
 const total = ref(0)
@@ -123,7 +125,7 @@ async function fetchAgents({ quiet = false }: FetchOptions = {}) {
         error.value = null
     } catch (e: any) {
         if (request.stale) return
-        error.value = apiErrorMessage(e, 'Failed to load agents')
+        error.value = apiErrorMessage(e, t('agents.loadFailed'))
     } finally {
         if (!quiet) loading.value = false
     }
@@ -227,9 +229,9 @@ function statusClass(status: AgentStatus): string {
 
 function statusLabel(status: AgentStatus): string {
     switch (status) {
-        case 'online': return 'Online'
-        case 'offline': return 'Offline'
-        case 'unknown': return 'Unknown'
+        case 'online': return t('agents.status.online')
+        case 'offline': return t('agents.status.offline')
+        case 'unknown': return t('agents.status.unknown')
         default: return status
     }
 }
@@ -240,10 +242,10 @@ function formatLastSeen(lastSeenAt: string | null): string {
     if (isNaN(date.getTime())) return '—'
     const now = Date.now()
     const diff = Math.floor((now - date.getTime()) / 1000)
-    if (diff < 60) return `${diff}s ago`
-    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-    return date.toLocaleDateString()
+    if (diff < 60) return t('agents.lastSeenSeconds', { n: diff })
+    if (diff < 3600) return t('agents.lastSeenMinutes', { n: Math.floor(diff / 60) })
+    if (diff < 86400) return t('agents.lastSeenHours', { n: Math.floor(diff / 3600) })
+    return date.toLocaleDateString(locale.value)
 }
 
 // Returns true when the agent's version is older than the latest known release.
@@ -286,9 +288,9 @@ useLiveRefresh('agents', fetchAgents)
         <!-- Header -->
         <div class="flex items-center justify-between">
             <div>
-                <h1 class="text-2xl font-semibold tracking-tight">Agents</h1>
+                <h1 class="text-2xl font-semibold tracking-tight">{{ t('agents.title') }}</h1>
                 <p class="mt-1 text-sm text-muted-foreground">
-                    Machines registered for backup management
+                    {{ t('agents.subtitle') }}
                 </p>
             </div>
             <RefreshButton live :loading="loading" :refresh="fetchAgents" />
@@ -304,17 +306,17 @@ useLiveRefresh('agents', fetchAgents)
             <Table>
                 <TableHeader>
                     <TableRow>
-                        <SortableTableHead label="Name" :active="sortKey === 'name'" :order="sortOrder"
+                        <SortableTableHead :label="t('agents.colName')" :active="sortKey === 'name'" :order="sortOrder"
                             @toggle="toggleSort('name')" />
-                        <SortableTableHead label="Hostname" :active="sortKey === 'hostname'" :order="sortOrder"
+                        <SortableTableHead :label="t('agents.colHostname')" :active="sortKey === 'hostname'" :order="sortOrder"
                             @toggle="toggleSort('hostname')" />
-                        <SortableTableHead label="OS / Arch" :active="sortKey === 'os'" :order="sortOrder"
+                        <SortableTableHead :label="t('agents.colOsArch')" :active="sortKey === 'os'" :order="sortOrder"
                             @toggle="toggleSort('os')" />
-                        <SortableTableHead label="Version" :active="sortKey === 'version'" :order="sortOrder"
+                        <SortableTableHead :label="t('agents.colVersion')" :active="sortKey === 'version'" :order="sortOrder"
                             @toggle="toggleSort('version')" />
-                        <SortableTableHead label="Status" :active="sortKey === 'status'" :order="sortOrder"
+                        <SortableTableHead :label="t('agents.colStatus')" :active="sortKey === 'status'" :order="sortOrder"
                             @toggle="toggleSort('status')" />
-                        <SortableTableHead label="Last Seen" :active="sortKey === 'last_seen'" :order="sortOrder"
+                        <SortableTableHead :label="t('agents.colLastSeen')" :active="sortKey === 'last_seen'" :order="sortOrder"
                             @toggle="toggleSort('last_seen', 'desc')" />
                         <TableHead class="w-13" />
                     </TableRow>
@@ -339,9 +341,9 @@ useLiveRefresh('agents', fetchAgents)
                                         <Server class="w-10 h-10 text-muted-foreground" />
                                     </div>
                                     <div>
-                                        <p class="font-medium">No agents connected</p>
+                                        <p class="font-medium">{{ t('agents.empty') }}</p>
                                         <p class="mt-1 text-sm text-muted-foreground">
-                                            Install and start the agent on a machine to see it appear here.
+                                            {{ t('agents.emptyDetail') }}
                                         </p>
                                     </div>
                                 </div>
@@ -355,7 +357,7 @@ useLiveRefresh('agents', fetchAgents)
                             class="cursor-pointer hover:bg-muted/50"
                             tabindex="0"
                             role="link"
-                            :aria-label="`View agent ${agent.name}`"
+                            :aria-label="t('agents.viewAgent', { name: agent.name })"
                             @click="goToDetail(agent)"
                             @keyup.enter="goToDetail(agent)">
                             <TableCell class="font-medium">{{ agent.name }}</TableCell>
@@ -400,24 +402,24 @@ useLiveRefresh('agents', fetchAgents)
                                     <DropdownMenuTrigger as-child>
                                         <Button variant="ghost" size="icon" class="w-8 h-8">
                                             <MoreHorizontal class="w-4 h-4" />
-                                            <span class="sr-only">Open actions</span>
+                                            <span class="sr-only">{{ t('agents.openActions') }}</span>
                                         </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end">
                                         <DropdownMenuItem @click="goToDetail(agent)">
                                             <Eye class="w-4 h-4 mr-2" />
-                                            View
+                                            {{ t('agents.view') }}
                                         </DropdownMenuItem>
                                         <DropdownMenuItem v-if="authStore.isAdmin" @click="openEditSheet(agent)">
                                             <PencilLine class="w-4 h-4 mr-2" />
-                                            Edit
+                                            {{ t('common.edit') }}
                                         </DropdownMenuItem>
                                         <DropdownMenuSeparator v-if="authStore.isAdmin" />
                                         <DropdownMenuItem v-if="authStore.isAdmin"
                                             class="text-destructive focus:text-destructive"
                                             @click="openDeleteDialog(agent)">
                                             <Trash2 class="w-4 h-4 mr-2" />
-                                            Delete
+                                            {{ t('common.delete') }}
                                         </DropdownMenuItem>
                                     </DropdownMenuContent>
                                 </DropdownMenu>
@@ -431,15 +433,19 @@ useLiveRefresh('agents', fetchAgents)
         <!-- Pagination -->
         <div v-if="!loading && totalPages > 1" class="flex items-center justify-between text-sm text-muted-foreground">
             <span>
-                Showing {{ offset + 1 }}–{{ Math.min(offset + pageSize, total) }} of {{ total }} agents
+                {{ t('agents.showing', {
+                    from: offset + 1,
+                    to: Math.min(offset + pageSize, total),
+                    total,
+                }) }}
             </span>
             <div class="flex items-center gap-2">
                 <Button variant="outline" size="sm" :disabled="page === 1" @click="goToPage(page - 1)">
-                    Previous
+                    {{ t('agents.previous') }}
                 </Button>
                 <span class="px-2">{{ page }} / {{ totalPages }}</span>
                 <Button variant="outline" size="sm" :disabled="page === totalPages" @click="goToPage(page + 1)">
-                    Next
+                    {{ t('agents.next') }}
                 </Button>
             </div>
         </div>

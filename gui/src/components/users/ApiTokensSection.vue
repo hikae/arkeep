@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { getLocalTimeZone, parseDate, today } from '@internationalized/date'
 import type { DateValue } from 'reka-ui'
 import { useForm, useField } from 'vee-validate'
@@ -27,6 +28,8 @@ import type { ApiResponse, ApiToken, CreatedApiToken } from '@/types'
 // List
 // ---------------------------------------------------------------------------
 
+const { t } = useI18n()
+
 const tokens = ref<ApiToken[]>([])
 const loading = ref(true)
 const loadError = ref<string | null>(null)
@@ -38,7 +41,7 @@ async function fetchTokens(): Promise<void> {
         const res = await api<ApiResponse<ApiToken[]>>('/api/v1/users/me/api-tokens')
         tokens.value = res.data
     } catch (e: any) {
-        loadError.value = apiErrorMessage(e, 'Failed to load API tokens.')
+        loadError.value = apiErrorMessage(e, t('apiTokens.loadFailed'))
     } finally {
         loading.value = false
     }
@@ -52,14 +55,14 @@ onMounted(fetchTokens)
 
 // Expiry choices, in days; "custom" sends the end of the chosen day, "never"
 // sends no expiry.
-const expiryOptions = [
-    { value: '7', label: '7 days' },
-    { value: '30', label: '30 days' },
-    { value: '90', label: '90 days' },
-    { value: '365', label: '1 year' },
-    { value: 'custom', label: 'Custom' },
-    { value: 'never', label: 'No expiry' },
-]
+const expiryOptions = computed(() => [
+    { value: '7', label: t('apiTokens.expiry.days', { n: 7 }) },
+    { value: '30', label: t('apiTokens.expiry.days', { n: 30 }) },
+    { value: '90', label: t('apiTokens.expiry.days', { n: 90 }) },
+    { value: '365', label: t('apiTokens.expiry.oneYear') },
+    { value: 'custom', label: t('apiTokens.expiry.custom') },
+    { value: 'never', label: t('apiTokens.noExpiry') },
+])
 
 // The range of a custom expiry date: from tomorrow, up to the last day whose
 // end is within the server's limit of 3650 days.
@@ -79,13 +82,13 @@ const copied = ref(false)
 
 const createForm = useForm({
     validationSchema: toTypedSchema(z.object({
-        name: z.string().trim().min(1, 'Name is required').max(100, 'At most 100 characters'),
+        name: z.string().trim().min(1, t('apiTokens.validation.nameRequired')).max(100, t('apiTokens.validation.max100')),
         expiry: z.string(),
         // The chosen day as "YYYY-MM-DD" when expiry is "custom".
         expiry_date: z.string(),
     }).superRefine((data, ctx) => {
         if (data.expiry === 'custom' && !data.expiry_date) {
-            ctx.addIssue({ code: 'custom', path: ['expiry_date'], message: 'Pick a date' })
+            ctx.addIssue({ code: 'custom', path: ['expiry_date'], message: t('apiTokens.pickDate') })
         }
     })),
     initialValues: { name: '', expiry: '365', expiry_date: '' },
@@ -141,7 +144,7 @@ const submitCreate = createForm.handleSubmit(async (values) => {
         createdToken.value = res.data
         await fetchTokens()
     } catch (e: any) {
-        createError.value = apiErrorMessage(e, 'Failed to create the API token.')
+        createError.value = apiErrorMessage(e, t('apiTokens.createFailed'))
     }
 })
 
@@ -176,10 +179,9 @@ function isExpired(t: ApiToken): boolean {
 <template>
     <div class="grid grid-cols-[280px_1fr] gap-12 py-8 border-b">
         <div>
-            <h2 class="text-sm font-semibold">API Tokens</h2>
+            <h2 class="text-sm font-semibold">{{ t('apiTokens.title') }}</h2>
             <p class="mt-1 text-sm text-muted-foreground">
-                Read-only tokens for programs that read Arkeep on your behalf, such as a Home Assistant
-                integration. A token sees what the user role sees and never changes anything.
+                {{ t('apiTokens.section.description') }}
             </p>
         </div>
 
@@ -194,29 +196,29 @@ function isExpired(t: ApiToken): boolean {
             </div>
 
             <p v-else-if="tokens.length === 0 && !loadError" class="text-sm text-muted-foreground">
-                You have no API tokens.
+                {{ t('apiTokens.section.empty') }}
             </p>
 
             <ul v-else class="w-full divide-y rounded-md border">
-                <li v-for="t in tokens" :key="t.id" class="flex items-center gap-4 px-4 py-3">
+                <li v-for="token in tokens" :key="token.id" class="flex items-center gap-4 px-4 py-3">
                     <KeyRound class="size-4 shrink-0 text-muted-foreground" />
                     <div class="min-w-0 flex-1">
-                        <p class="truncate text-sm font-medium">{{ t.name }}</p>
+                        <p class="truncate text-sm font-medium">{{ token.name }}</p>
                         <p class="text-xs text-muted-foreground">
-                            <code>{{ t.hint }}…</code>
-                            · Created {{ formatDate(t.created_at) }}
-                            · Last used {{ t.last_used_at ? formatDate(t.last_used_at) : 'never' }}
+                            <code>{{ token.hint }}…</code>
+                            · {{ t('apiTokens.createdOn', { date: formatDate(token.created_at) }) }}
+                            · {{ t('apiTokens.lastUsed', { value: token.last_used_at ? formatDate(token.last_used_at) : t('apiTokens.neverLower') }) }}
                             ·
-                            <span :class="{ 'text-destructive': isExpired(t) }">
-                                {{ t.expires_at ? (isExpired(t) ? 'Expired ' : 'Expires ') + formatDate(t.expires_at) : 'No expiry' }}
+                            <span :class="{ 'text-destructive': isExpired(token) }">
+                                {{ token.expires_at ? (isExpired(token) ? t('apiTokens.expiredOn', { date: formatDate(token.expires_at) }) : t('apiTokens.expiresOn', { date: formatDate(token.expires_at) })) : t('apiTokens.noExpiry') }}
                             </span>
                         </p>
                     </div>
-                    <Button variant="outline" size="sm" @click="revoking = t">Revoke</Button>
+                    <Button variant="outline" size="sm" @click="revoking = token">{{ t('apiTokens.revoke') }}</Button>
                 </li>
             </ul>
 
-            <Button variant="outline" @click="openCreateDialog">Create token</Button>
+            <Button variant="outline" @click="openCreateDialog">{{ t('apiTokens.section.create') }}</Button>
         </div>
     </div>
 
@@ -225,10 +227,9 @@ function isExpired(t: ApiToken): boolean {
         <DialogContent>
             <template v-if="!createdToken">
                 <DialogHeader>
-                    <DialogTitle>Create an API token</DialogTitle>
+                    <DialogTitle>{{ t('apiTokens.create.title') }}</DialogTitle>
                     <DialogDescription>
-                        The token can read agents, destinations, policies, jobs and snapshots. It cannot change
-                        anything, start a job or manage tokens.
+                        {{ t('apiTokens.create.description') }}
                     </DialogDescription>
                 </DialogHeader>
                 <FieldGroup>
@@ -237,14 +238,14 @@ function isExpired(t: ApiToken): boolean {
                         <AlertDescription>{{ createError }}</AlertDescription>
                     </Alert>
                     <Field>
-                        <FieldLabel for="api-token-name">Name</FieldLabel>
-                        <Input id="api-token-name" v-model="name" placeholder="Home Assistant"
+                        <FieldLabel for="api-token-name">{{ t('common.name') }}</FieldLabel>
+                        <Input id="api-token-name" v-model="name" :placeholder="t('apiTokens.create.namePlaceholder')"
                             :class="nameError ? 'border-destructive focus-visible:ring-destructive/30' : ''"
                             @keydown.enter.prevent="submitCreate()" />
                         <FieldError v-if="nameError">{{ nameError }}</FieldError>
                     </Field>
                     <Field>
-                        <FieldLabel for="api-token-expiry">Expiry</FieldLabel>
+                        <FieldLabel for="api-token-expiry">{{ t('apiTokens.create.expiryLabel') }}</FieldLabel>
                         <Select v-model="expiry">
                             <SelectTrigger id="api-token-expiry" class="w-40">
                                 <SelectValue />
@@ -256,12 +257,12 @@ function isExpired(t: ApiToken): boolean {
                             </SelectContent>
                         </Select>
                         <FieldDescription v-if="expiry !== 'custom'">
-                            {{ expiresOn ? `The token will expire on ${formatDay(expiresOn)}.` : 'The token will never expire.' }}
-                            You can revoke it at any time.
+                            {{ expiresOn ? t('apiTokens.create.expiresOn', { date: formatDay(expiresOn) }) : t('apiTokens.create.neverExpires') }}
+                            {{ t('apiTokens.create.revokeAnytime') }}
                         </FieldDescription>
                     </Field>
                     <Field v-if="expiry === 'custom'">
-                        <FieldLabel for="api-token-expiry-date">Expiry date</FieldLabel>
+                        <FieldLabel for="api-token-expiry-date">{{ t('apiTokens.create.expiryDateLabel') }}</FieldLabel>
                         <Popover v-model:open="datePickerOpen">
                             <PopoverTrigger as-child>
                                 <Button id="api-token-expiry-date" variant="outline"
@@ -271,7 +272,7 @@ function isExpired(t: ApiToken): boolean {
                                         expiryDateError ? 'border-destructive focus-visible:ring-destructive/30' : '',
                                     ]">
                                     <CalendarIcon class="size-4" />
-                                    {{ expiresOn ? formatDay(expiresOn) : 'Pick a date' }}
+                                    {{ expiresOn ? formatDay(expiresOn) : t('apiTokens.pickDate') }}
                                 </Button>
                             </PopoverTrigger>
                             <PopoverContent class="w-auto p-0" align="start">
@@ -281,31 +282,31 @@ function isExpired(t: ApiToken): boolean {
                         </Popover>
                         <FieldError v-if="expiryDateError">{{ expiryDateError }}</FieldError>
                         <FieldDescription v-else>
-                            The token works until the end of that day. You can revoke it at any time.
+                            {{ t('apiTokens.create.customDateHelp') }}
                         </FieldDescription>
                     </Field>
                 </FieldGroup>
                 <DialogFooter>
-                    <Button variant="outline" :disabled="creating" @click="closeCreateDialog">Cancel</Button>
+                    <Button variant="outline" :disabled="creating" @click="closeCreateDialog">{{ t('common.cancel') }}</Button>
                     <Button :disabled="creating" @click="submitCreate()">
                         <Loader2 v-if="creating" class="size-4 animate-spin" />
-                        {{ creating ? 'Creating…' : 'Create' }}
+                        {{ creating ? t('apiTokens.create.creating') : t('apiTokens.create.submit') }}
                     </Button>
                 </DialogFooter>
             </template>
 
             <template v-else>
                 <DialogHeader>
-                    <DialogTitle>Copy your API token</DialogTitle>
+                    <DialogTitle>{{ t('apiTokens.created.title') }}</DialogTitle>
                     <DialogDescription>
-                        It will not be shown again. Store it where the program that uses it keeps its secrets.
+                        {{ t('apiTokens.created.description') }}
                     </DialogDescription>
                 </DialogHeader>
                 <code data-testid="created-api-token"
                     class="block w-full break-all rounded-md border bg-muted/50 p-3 font-mono text-sm">{{ createdToken.token }}</code>
                 <DialogFooter class="gap-2 sm:justify-between">
-                    <Button variant="outline" @click="copyToken">{{ copied ? 'Copied!' : 'Copy' }}</Button>
-                    <Button @click="closeCreateDialog">Done</Button>
+                    <Button variant="outline" @click="copyToken">{{ copied ? t('apiTokens.created.copied') : t('common.copy') }}</Button>
+                    <Button @click="closeCreateDialog">{{ t('apiTokens.created.done') }}</Button>
                 </DialogFooter>
             </template>
         </DialogContent>

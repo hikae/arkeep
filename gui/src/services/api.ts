@@ -19,6 +19,7 @@
 import { ofetch, FetchError, type FetchOptions } from 'ofetch'
 import { useAuthStore } from '@/stores/auth'
 import { router } from '@/router'
+import { i18n } from '@/i18n'
 
 // Normalize any HeadersInit variant into a plain Record so we can safely
 // spread and extend it with the Authorization header.
@@ -81,7 +82,7 @@ export async function api<T = unknown>(
     router.push('/login')
     // Throw so the original caller's await rejects cleanly rather than
     // silently returning undefined.
-    throw new Error('Session expired')
+    throw new Error(i18n.global.t('errors.sessionExpired'))
   }
 
   // ── Retry with new token ────────────────────────────────────────────────────
@@ -111,7 +112,7 @@ export function apiErrorMessage(err: unknown, fallback: string): string {
   if (typeof serverMessage === 'string' && serverMessage !== '') return serverMessage
   if (err instanceof FetchError) {
     if (e.status === 502 || e.status === 503 || e.status === 504) {
-      return `No answer from the Arkeep server (HTTP ${e.status}). If it is behind a reverse proxy, the proxy may have given up on this request: raise its timeout.`
+      return i18n.global.t('errors.gatewayNoAnswer', { status: e.status })
     }
     return fallback
   }

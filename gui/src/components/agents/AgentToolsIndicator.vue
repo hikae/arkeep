@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { ExternalLink, Package } from '@lucide/vue'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 
 // Shows the versions of the restic and rclone binaries embedded in an agent.
 // Agents that do not report them render nothing.
+const { t } = useI18n()
+
 const props = defineProps<{
     resticVersion: string
     rcloneVersion: string
@@ -14,10 +17,10 @@ const tools = computed(() =>
     [
         { name: 'restic', version: props.resticVersion, repo: 'restic/restic' },
         { name: 'rclone', version: props.rcloneVersion, repo: 'rclone/rclone' },
-    ].filter((t) => t.version),
+    ].filter((tool) => tool.version),
 )
 
-const label = computed(() => 'Embedded ' + tools.value.map((t) => `${t.name} ${t.version}`).join(', '))
+const label = computed(() => t('agentTools.embedded', { tools: tools.value.map((tool) => `${tool.name} ${tool.version}`).join(', ') }))
 </script>
 
 <template>
@@ -32,15 +35,15 @@ const label = computed(() => 'Embedded ' + tools.value.map((t) => `${t.name} ${t
             <div class="flex flex-col space-y-3">
                 <div class="flex items-center space-x-2">
                     <Package class="size-4 text-muted-foreground shrink-0" />
-                    <p class="text-sm font-semibold leading-none">Embedded tools</p>
+                    <p class="text-sm font-semibold leading-none">{{ t('agentTools.title') }}</p>
                 </div>
                 <div class="flex flex-col space-y-1.5">
-                    <div v-for="t in tools" :key="t.name" class="flex items-center justify-between text-sm">
-                        <span class="text-muted-foreground">{{ t.name }}</span>
-                        <a :href="`https://github.com/${t.repo}/releases/tag/v${t.version}`" target="_blank"
+                    <div v-for="tool in tools" :key="tool.name" class="flex items-center justify-between text-sm">
+                        <span class="text-muted-foreground">{{ tool.name }}</span>
+                        <a :href="`https://github.com/${tool.repo}/releases/tag/v${tool.version}`" target="_blank"
                             rel="noopener noreferrer"
                             class="inline-flex items-center gap-1.5 font-mono text-xs font-medium text-primary hover:underline">
-                            {{ t.version }}
+                            {{ tool.version }}
                             <ExternalLink class="size-3" />
                         </a>
                     </div>

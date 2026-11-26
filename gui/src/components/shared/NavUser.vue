@@ -2,6 +2,7 @@
 import {
     BadgeCheck,
     ChevronsUpDown,
+    Languages,
     LogOut,
     Moon,
     Sun,
@@ -17,7 +18,12 @@ import {
     DropdownMenuGroup,
     DropdownMenuItem,
     DropdownMenuLabel,
+    DropdownMenuRadioGroup,
+    DropdownMenuRadioItem,
     DropdownMenuSeparator,
+    DropdownMenuSub,
+    DropdownMenuSubContent,
+    DropdownMenuSubTrigger,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -29,6 +35,14 @@ import {
 import { useTheme } from "@/composables/useTheme";
 import { useAuthStore } from "@/stores/auth";
 import { useRouter } from "vue-router";
+import { computed } from "vue"
+import { useI18n } from "vue-i18n"
+import {
+    LOCALE_LABELS,
+    SUPPORTED_LOCALES,
+    setLocale,
+    type AppLocale,
+} from "@/i18n"
 
 const props = defineProps<{
     user: { display_name: string, email: string, user_initials: string }
@@ -38,6 +52,13 @@ const { isMobile } = useSidebar()
 const auth = useAuthStore();
 const { cycle, modeLabel, mode } = useTheme()
 const router = useRouter()
+const { t, locale } = useI18n()
+
+const currentLocale = computed(() => locale.value as AppLocale)
+
+function chooseLocale(value: unknown): void {
+    setLocale(value as AppLocale)
+}
 
 async function logout(): Promise<void> {
     await auth.logout()
@@ -95,13 +116,26 @@ async function logout(): Promise<void> {
                         </DropdownMenuItem>
                         <DropdownMenuItem @click="router.push({ name: 'profile' })">
                             <BadgeCheck />
-                            Profile
+                            {{ t('nav.profile') }}
                         </DropdownMenuItem>
+                        <DropdownMenuSub>
+                            <DropdownMenuSubTrigger>
+                                <Languages />
+                                {{ t('locale.label') }}
+                            </DropdownMenuSubTrigger>
+                            <DropdownMenuSubContent>
+                                <DropdownMenuRadioGroup :model-value="currentLocale" @update:model-value="chooseLocale">
+                                    <DropdownMenuRadioItem v-for="code in SUPPORTED_LOCALES" :key="code" :value="code">
+                                        {{ LOCALE_LABELS[code] }}
+                                    </DropdownMenuRadioItem>
+                                </DropdownMenuRadioGroup>
+                            </DropdownMenuSubContent>
+                        </DropdownMenuSub>
                     </DropdownMenuGroup>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem variant="destructive" @click="logout()">
                         <LogOut />
-                        Log out
+                        {{ t('auth.logout') }}
                     </DropdownMenuItem>
                 </DropdownMenuContent>
             </DropdownMenu>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import {
     Table,
     TableBody,
@@ -26,7 +27,7 @@ import { useLiveRefresh, type FetchOptions } from '@/composables/useLiveRefresh'
 import { requestOrder } from '@/lib/requestOrder'
 import { api, apiErrorMessage } from '@/services/api'
 import type { ApiResponse, Job, JobStatus, JobType } from '@/types'
-import { statusVariant, statusClass, statusLabel, statusIcon, formatDate, formatDuration } from '@/lib/jobUtils'
+import { statusVariant, statusClass, statusLabel, statusIcon, jobTypeLabel, formatDate, formatDuration } from '@/lib/jobUtils'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -43,6 +44,7 @@ interface JobListResponse {
 
 const router = useRouter()
 const route = useRoute()
+const { t } = useI18n()
 
 const jobs = ref<Job[]>([])
 const total = ref(0)
@@ -115,7 +117,7 @@ async function fetchJobs({ quiet = false }: FetchOptions = {}) {
         error.value = null
     } catch (e: any) {
         if (request.stale) return
-        error.value = apiErrorMessage(e, 'Failed to load jobs.')
+        error.value = apiErrorMessage(e, t('jobs.loadFailed'))
     } finally {
         if (!quiet) loading.value = false
     }
@@ -145,9 +147,9 @@ useLiveRefresh('jobs', fetchJobs)
         <!-- Page header -->
         <div class="flex items-center justify-between">
             <div>
-                <h1 class="text-2xl font-semibold tracking-tight">Jobs</h1>
+                <h1 class="text-2xl font-semibold tracking-tight">{{ t('jobs.title') }}</h1>
                 <p class="mt-1 text-sm text-muted-foreground">
-                    Recent backup executions across all policies.
+                    {{ t('jobs.subtitle') }}
                 </p>
             </div>
             <div class="flex items-center gap-2">
@@ -164,37 +166,37 @@ useLiveRefresh('jobs', fetchJobs)
         <div class="flex items-center gap-3">
             <Select v-model="statusFilter">
                 <SelectTrigger class="w-40">
-                    <SelectValue placeholder="All statuses" />
+                    <SelectValue :placeholder="t('jobs.allStatuses')" />
                 </SelectTrigger>
                 <SelectContent>
-                    <SelectItem value="all">All statuses</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                    <SelectItem value="waiting">Waiting</SelectItem>
-                    <SelectItem value="running">Running</SelectItem>
-                    <SelectItem value="succeeded">Succeeded</SelectItem>
-                    <SelectItem value="failed">Failed</SelectItem>
-                    <SelectItem value="cancelled">Cancelled</SelectItem>
-                    <SelectItem value="interrupted">Interrupted</SelectItem>
+                    <SelectItem value="all">{{ t('jobs.allStatuses') }}</SelectItem>
+                    <SelectItem value="pending">{{ t('status.pending') }}</SelectItem>
+                    <SelectItem value="waiting">{{ t('status.waiting') }}</SelectItem>
+                    <SelectItem value="running">{{ t('status.running') }}</SelectItem>
+                    <SelectItem value="succeeded">{{ t('status.succeeded') }}</SelectItem>
+                    <SelectItem value="failed">{{ t('status.failed') }}</SelectItem>
+                    <SelectItem value="cancelled">{{ t('status.cancelled') }}</SelectItem>
+                    <SelectItem value="interrupted">{{ t('status.interrupted') }}</SelectItem>
                 </SelectContent>
             </Select>
 
             <Select v-model="typeFilter">
                 <SelectTrigger class="w-40">
-                    <SelectValue placeholder="All types" />
+                    <SelectValue :placeholder="t('jobs.allTypes')" />
                 </SelectTrigger>
                 <SelectContent>
-                    <SelectItem value="all">All types</SelectItem>
-                    <SelectItem value="backup">Backup</SelectItem>
-                    <SelectItem value="restore">Restore</SelectItem>
-                    <SelectItem value="retention">Retention</SelectItem>
-                    <SelectItem value="check">Integrity check</SelectItem>
-                    <SelectItem value="repair">Repair</SelectItem>
+<SelectItem value="all">{{ t('jobs.allTypes') }}</SelectItem>
+                    <SelectItem value="backup">{{ t('jobType.backup') }}</SelectItem>
+                    <SelectItem value="restore">{{ t('jobType.restore') }}</SelectItem>
+                    <SelectItem value="retention">{{ t('jobType.retention') }}</SelectItem>
+                    <SelectItem value="check">{{ t('jobType.check') }}</SelectItem>
+                    <SelectItem value="repair">{{ t('jobType.repair') }}</SelectItem>
                 </SelectContent>
             </Select>
 
             <!-- Result count -->
             <span v-if="!loading" class="text-sm text-muted-foreground">
-                {{ total }} job{{ total !== 1 ? 's' : '' }}
+                {{ t('jobs.count', total, { named: { n: total } }) }}
             </span>
         </div>
 
@@ -203,12 +205,12 @@ useLiveRefresh('jobs', fetchJobs)
             <Table>
                 <TableHeader>
                     <TableRow>
-                        <TableHead>Policy</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Agent</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Started</TableHead>
-                        <TableHead>Duration</TableHead>
+                        <TableHead>{{ t('jobs.colPolicy') }}</TableHead>
+                        <TableHead>{{ t('jobs.colType') }}</TableHead>
+                        <TableHead>{{ t('jobs.colAgent') }}</TableHead>
+                        <TableHead>{{ t('jobs.colStatus') }}</TableHead>
+                        <TableHead>{{ t('jobs.colStarted') }}</TableHead>
+                        <TableHead>{{ t('jobs.colDuration') }}</TableHead>
                     </TableRow>
                 </TableHeader>
 
@@ -231,9 +233,9 @@ useLiveRefresh('jobs', fetchJobs)
                                         <BriefcaseBusiness class="w-10 h-10 text-muted-foreground" />
                                     </div>
                                     <div>
-                                        <p class="font-medium">No jobs found</p>
+                                        <p class="font-medium">{{ t('jobs.empty') }}</p>
                                         <p class="mt-1 text-sm text-muted-foreground">
-                                            Jobs will appear here once a policy has been triggered.
+                                            {{ t('jobs.emptyDetail') }}
                                         </p>
                                     </div>
                                 </div>
@@ -247,12 +249,12 @@ useLiveRefresh('jobs', fetchJobs)
                             class="cursor-pointer hover:bg-muted/50"
                             tabindex="0"
                             role="link"
-                            :aria-label="`View job ${job.policy_name}`"
+                            :aria-label="t('jobs.viewJob', { name: job.policy_name })"
                             @click="router.push(`/jobs/${job.id}`)"
                             @keyup.enter="router.push(`/jobs/${job.id}`)">
                             <TableCell class="font-medium">{{ job.policy_name }}</TableCell>
                             <TableCell>
-                                <Badge variant="outline" class="capitalize">{{ job.type }}</Badge>
+                                <Badge variant="outline">{{ jobTypeLabel(job.type) }}</Badge>
                             </TableCell>
                             <TableCell class="text-muted-foreground">{{ job.agent_name }}</TableCell>
                             <TableCell>
@@ -277,15 +279,19 @@ useLiveRefresh('jobs', fetchJobs)
         <!-- Pagination -->
         <div v-if="!loading && totalPages > 1" class="flex items-center justify-between text-sm text-muted-foreground">
             <span>
-                Showing {{ offset + 1 }}–{{ Math.min(offset + pageSize, total) }} of {{ total }} jobs
+                {{ t('jobs.showing', {
+                    from: offset + 1,
+                    to: Math.min(offset + pageSize, total),
+                    total,
+                }) }}
             </span>
             <div class="flex items-center gap-2">
                 <Button variant="outline" size="sm" :disabled="page === 1" @click="goToPage(page - 1)">
-                    Previous
+                    {{ t('agents.previous') }}
                 </Button>
                 <span class="px-2">{{ page }} / {{ totalPages }}</span>
                 <Button variant="outline" size="sm" :disabled="page === totalPages" @click="goToPage(page + 1)">
-                    Next
+                    {{ t('agents.next') }}
                 </Button>
             </div>
         </div>

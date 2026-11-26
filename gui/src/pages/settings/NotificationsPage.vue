@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useForm, useField } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
 import { z } from 'zod'
@@ -27,6 +28,7 @@ import type { ApiResponse, NotificationSettings, ReportFrequency, WebhookSetting
 // ---------------------------------------------------------------------------
 
 const loading = ref(false)
+const { t } = useI18n()
 const submitError = ref<string | null>(null)
 const success = ref(false)
 
@@ -40,13 +42,13 @@ const serverTimezone = ref('')
 // The days of the weekly report, Monday first, with the server's numbering
 // (0 is Sunday).
 const WEEKDAYS = [
-    { value: 1, label: 'Monday' },
-    { value: 2, label: 'Tuesday' },
-    { value: 3, label: 'Wednesday' },
-    { value: 4, label: 'Thursday' },
-    { value: 5, label: 'Friday' },
-    { value: 6, label: 'Saturday' },
-    { value: 0, label: 'Sunday' },
+    { value: 1, labelKey: 'settingsNotifications.weekdays.monday' },
+    { value: 2, labelKey: 'settingsNotifications.weekdays.tuesday' },
+    { value: 3, labelKey: 'settingsNotifications.weekdays.wednesday' },
+    { value: 4, labelKey: 'settingsNotifications.weekdays.thursday' },
+    { value: 5, labelKey: 'settingsNotifications.weekdays.friday' },
+    { value: 6, labelKey: 'settingsNotifications.weekdays.saturday' },
+    { value: 0, labelKey: 'settingsNotifications.weekdays.sunday' },
 ]
 
 // The last day of the month the monthly report can be sent on: the last one
@@ -64,7 +66,7 @@ const schema = toTypedSchema(
         agent_online: z.boolean(),
         email_enabled: z.boolean(),
         report_frequency: z.enum(['off', 'hourly', 'daily', 'weekly', 'monthly']),
-        report_time: z.string().regex(/^([01][0-9]|2[0-3]):[0-5][0-9]$/, 'Must be a time (HH:MM)'),
+        report_time: z.string().regex(/^([01][0-9]|2[0-3]):[0-5][0-9]$/, t('settingsNotifications.report.timeInvalid')),
         report_minute: integerInRange(0, 59),
         report_weekday: z.number().int().min(0).max(6),
         report_day: z.number().int().min(1).max(MAX_REPORT_DAY),
@@ -73,7 +75,7 @@ const schema = toTypedSchema(
         webhook_secret: z.string(),
     }).superRefine((data, ctx) => {
         if (data.webhook_enabled && !isHttpURL(data.webhook_url.trim())) {
-            ctx.addIssue({ code: 'custom', path: ['webhook_url'], message: 'Must be an http(s) URL' })
+            ctx.addIssue({ code: 'custom', path: ['webhook_url'], message: t('settingsNotifications.urlInvalid') })
         }
     }),
 )
@@ -209,7 +211,7 @@ const submit = handleSubmit(async (values) => {
         success.value = true
         setTimeout(() => { success.value = false }, 3000)
     } catch (e: any) {
-        submitError.value = apiErrorMessage(e, 'Failed to save notification settings')
+        submitError.value = apiErrorMessage(e, t('settingsNotifications.saveFailed'))
     }
 })
 
@@ -230,9 +232,9 @@ const sendTestWebhook = handleSubmit(async (values) => {
             method: 'POST',
             body: { url: values.webhook_url.trim(), secret: values.webhook_secret },
         })
-        webhookTestResult.value = { ok: true, message: 'Test webhook delivered.' }
+        webhookTestResult.value = { ok: true, message: t('settingsNotifications.testDelivered') }
     } catch (e: any) {
-        webhookTestResult.value = { ok: false, message: apiErrorMessage(e, 'Failed to send the test webhook') }
+        webhookTestResult.value = { ok: false, message: apiErrorMessage(e, t('settingsNotifications.testFailed')) }
     } finally {
         testingWebhook.value = false
     }
@@ -249,13 +251,12 @@ function discard() {
     <!-- Section header -->
     <div class="flex items-start justify-between gap-4 mb-6">
         <div>
-            <h2 class="text-base font-semibold">Notifications</h2>
+            <h2 class="text-base font-semibold">{{ t('settingsNotifications.title') }}</h2>
             <p class="mt-1 text-sm text-muted-foreground">
-                Which events Arkeep reports, and the channels it sends them to. In-app notifications are always
-                shown regardless of these settings.
+                {{ t('settingsNotifications.description') }}
             </p>
         </div>
-        <Button variant="outline" size="icon" aria-label="Refresh" :disabled="loading" @click="fetchAll">
+        <Button variant="outline" size="icon" :aria-label="t('common.refresh')" :disabled="loading" @click="fetchAll">
             <RefreshCw class="size-4" :class="{ 'animate-spin': loading }" />
         </Button>
     </div>
@@ -279,22 +280,22 @@ function discard() {
                     leave-active-class="transition-all duration-150" leave-to-class="-translate-y-1 opacity-0">
                     <Alert v-if="success"
                         class="border-emerald-500/30 bg-emerald-500/5 text-emerald-600 dark:text-emerald-400">
-                        <AlertDescription>Notification settings saved.</AlertDescription>
+                        <AlertDescription>{{ t('settingsNotifications.saved') }}</AlertDescription>
                     </Alert>
                 </Transition>
 
                 <!-- ── Events ──────────────────────────────────────────────── -->
                 <section class="flex flex-col gap-3">
                     <div>
-                        <h3 class="text-sm font-medium">Events</h3>
-                        <p class="text-xs text-muted-foreground">Sent to every enabled channel below.</p>
+                        <h3 class="text-sm font-medium">{{ t('settingsNotifications.events') }}</h3>
+                        <p class="text-xs text-muted-foreground">{{ t('settingsNotifications.eventsHelp') }}</p>
                     </div>
 
                     <div class="flex items-center justify-between rounded-lg border px-4 py-3">
                         <div>
-                            <p class="text-sm font-medium">Job failed</p>
+                            <p class="text-sm font-medium">{{ t('settingsNotifications.jobFailed') }}</p>
                             <p class="text-xs text-muted-foreground">
-                                Send a notification when a backup job fails.
+                                {{ t('settingsNotifications.jobFailedHelp') }}
                             </p>
                         </div>
                         <Switch :model-value="jobFailure" @update:model-value="jobFailure = $event" />
@@ -302,9 +303,9 @@ function discard() {
 
                     <div class="flex items-center justify-between rounded-lg border px-4 py-3">
                         <div>
-                            <p class="text-sm font-medium">Job succeeded</p>
+                            <p class="text-sm font-medium">{{ t('settingsNotifications.jobSucceeded') }}</p>
                             <p class="text-xs text-muted-foreground">
-                                Send a notification when a backup job completes successfully.
+                                {{ t('settingsNotifications.jobSucceededHelp') }}
                             </p>
                         </div>
                         <Switch :model-value="jobSuccess" @update:model-value="jobSuccess = $event" />
@@ -312,9 +313,9 @@ function discard() {
 
                     <div class="flex items-center justify-between rounded-lg border px-4 py-3">
                         <div>
-                            <p class="text-sm font-medium">Agent went offline</p>
+                            <p class="text-sm font-medium">{{ t('settingsNotifications.agentOffline') }}</p>
                             <p class="text-xs text-muted-foreground">
-                                Send a notification when an agent stops responding.
+                                {{ t('settingsNotifications.agentOfflineHelp') }}
                             </p>
                         </div>
                         <Switch :model-value="agentOffline"
@@ -323,9 +324,9 @@ function discard() {
 
                     <div class="flex items-center justify-between rounded-lg border px-4 py-3">
                         <div>
-                            <p class="text-sm font-medium">Agent came back online</p>
+                            <p class="text-sm font-medium">{{ t('settingsNotifications.agentOnline') }}</p>
                             <p class="text-xs text-muted-foreground">
-                                Send a notification when an agent reconnects. Off by default.
+                                {{ t('settingsNotifications.agentOnlineHelp') }}
                             </p>
                         </div>
                         <Switch :model-value="agentOnline"
@@ -338,8 +339,8 @@ function discard() {
                 <!-- ── Channels: email and webhook ─────────────────────────── -->
                 <section class="flex flex-col gap-3">
                     <div>
-                        <h3 class="text-sm font-medium">Channels</h3>
-                        <p class="text-xs text-muted-foreground">Where Arkeep sends the events above.</p>
+                        <h3 class="text-sm font-medium">{{ t('settingsNotifications.channels') }}</h3>
+                        <p class="text-xs text-muted-foreground">{{ t('settingsNotifications.channelsHelp') }}</p>
                     </div>
 
                     <div class="flex items-center justify-between gap-4 rounded-lg border px-4 py-3">
@@ -348,10 +349,9 @@ function discard() {
                                 <Mail class="size-4" />
                             </div>
                             <div class="min-w-0">
-                                <p class="text-sm font-medium">Email</p>
+                                <p class="text-sm font-medium">{{ t('common.email') }}</p>
                                 <p class="text-xs text-muted-foreground">
-                                    To the notification recipients set in SMTP settings. Password reset emails are
-                                    sent either way.
+                                    {{ t('settingsNotifications.emailHelp') }}
                                 </p>
                             </div>
                         </div>
@@ -365,9 +365,9 @@ function discard() {
                                     <Webhook class="size-4" />
                                 </div>
                                 <div class="min-w-0">
-                                    <p class="text-sm font-medium">Webhook</p>
+                                    <p class="text-sm font-medium">{{ t('settingsNotifications.webhook') }}</p>
                                     <p class="text-xs text-muted-foreground">
-                                        An HTTP POST with a JSON payload to a URL of yours.
+                                        {{ t('settingsNotifications.webhookHelp') }}
                                     </p>
                                 </div>
                             </div>
@@ -379,7 +379,7 @@ function discard() {
                             leave-to-class="opacity-0 -translate-y-1">
                             <div v-if="webhookEnabled" class="flex flex-col gap-4 border-t px-4 py-4">
                                 <Field>
-                                    <FieldLabel for="webhook-url">Webhook URL</FieldLabel>
+                                    <FieldLabel for="webhook-url">{{ t('settingsNotifications.webhookUrl') }}</FieldLabel>
                                     <Input id="webhook-url" v-model="webhookUrl"
                                         placeholder="https://hooks.example.com/arkeep" autocomplete="off"
                                         :class="webhookUrlError ? 'border-destructive focus-visible:ring-destructive/30' : ''" />
@@ -387,14 +387,13 @@ function discard() {
                                 </Field>
                                 <Field>
                                     <FieldLabel for="webhook-secret">
-                                        Webhook Secret
-                                        <span v-if="webhookExists" class="text-muted-foreground font-normal">(optional)</span>
+                                        {{ t('settingsNotifications.webhookSecret') }}
+                                        <span v-if="webhookExists" class="text-muted-foreground font-normal">{{ t('common.optional') }}</span>
                                     </FieldLabel>
                                     <Input id="webhook-secret" v-model="webhookSecret" type="password"
-                                        :placeholder="webhookExists ? '(unchanged)' : ''" autocomplete="new-password" />
+                                        :placeholder="webhookExists ? t('settingsNotifications.unchanged') : ''" autocomplete="new-password" />
                                     <p class="text-xs text-muted-foreground">
-                                        Used to sign each request with an <code>X-Arkeep-Signature</code> header
-                                        (HMAC-SHA256) so the receiving endpoint can verify it came from Arkeep.
+                                        {{ t('settingsNotifications.webhookSecretHelp') }}
                                     </p>
                                 </Field>
                                 <div class="flex flex-col items-start gap-2">
@@ -402,7 +401,7 @@ function discard() {
                                         @click="sendTestWebhook">
                                         <Loader2 v-if="testingWebhook" class="size-4 animate-spin" />
                                         <Send v-else class="size-4" />
-                                        {{ testingWebhook ? 'Sending…' : 'Send test webhook' }}
+                                        {{ testingWebhook ? t('settingsNotifications.sending') : t('settingsNotifications.sendTestWebhook') }}
                                     </Button>
                                     <p v-if="webhookTestResult" data-testid="webhook-test-result" class="text-xs"
                                         :class="webhookTestResult.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'">
@@ -428,32 +427,31 @@ function discard() {
         <!-- ── Job report ──────────────────────────────────────────── -->
         <section class="flex flex-col gap-3">
             <div>
-                <h3 class="text-sm font-medium">Job report</h3>
+                <h3 class="text-sm font-medium">{{ t('settingsNotifications.report.title') }}</h3>
                 <p class="text-xs text-muted-foreground">
-                    One email listing all jobs that finished since the previous report, sent to the
-                    notification recipients. Skipped when no job finished.
+                    {{ t('settingsNotifications.report.description') }}
                 </p>
             </div>
 
             <div class="rounded-lg border">
                 <div class="flex items-center justify-between gap-4 px-4 py-3">
                     <div class="min-w-0">
-                        <p class="text-sm font-medium">Frequency</p>
+                        <p class="text-sm font-medium">{{ t('settingsNotifications.report.frequency') }}</p>
                         <p class="text-xs text-muted-foreground">
-                            Hourly at a set minute, or daily, weekly or monthly at a set time.
+                            {{ t('settingsNotifications.report.frequencyHelp') }}
                         </p>
                     </div>
                     <Select :model-value="reportFrequency"
                         @update:model-value="reportFrequency = $event as ReportFrequency">
-                        <SelectTrigger id="report-frequency" class="w-32 shrink-0" aria-label="Report frequency">
+                        <SelectTrigger id="report-frequency" class="w-32 shrink-0" :aria-label="t('settingsNotifications.report.frequencyAria')">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="off">Off</SelectItem>
-                            <SelectItem value="hourly">Hourly</SelectItem>
-                            <SelectItem value="daily">Daily</SelectItem>
-                            <SelectItem value="weekly">Weekly</SelectItem>
-                            <SelectItem value="monthly">Monthly</SelectItem>
+                            <SelectItem value="off">{{ t('settingsNotifications.report.off') }}</SelectItem>
+                            <SelectItem value="hourly">{{ t('settingsNotifications.report.hourly') }}</SelectItem>
+                            <SelectItem value="daily">{{ t('settingsNotifications.report.daily') }}</SelectItem>
+                            <SelectItem value="weekly">{{ t('settingsNotifications.report.weekly') }}</SelectItem>
+                            <SelectItem value="monthly">{{ t('settingsNotifications.report.monthly') }}</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
@@ -463,8 +461,8 @@ function discard() {
                 <div v-if="reportFrequency === 'hourly'" class="flex flex-col gap-1.5 border-t px-4 py-3">
                     <div class="flex items-center justify-between gap-4">
                         <div class="min-w-0">
-                            <FieldLabel for="report-minute" class="text-sm font-medium">Minute</FieldLabel>
-                            <p class="text-xs text-muted-foreground">Minutes past every hour, e.g. 30 for XX:30.</p>
+                            <FieldLabel for="report-minute" class="text-sm font-medium">{{ t('settingsNotifications.report.minute') }}</FieldLabel>
+                            <p class="text-xs text-muted-foreground">{{ t('settingsNotifications.report.minuteHelp') }}</p>
                         </div>
                         <Input id="report-minute" v-model="reportMinute" type="number" min="0" max="59"
                             class="w-32 shrink-0"
@@ -474,15 +472,15 @@ function discard() {
                 </div>
 
                 <div v-if="reportFrequency === 'weekly'" class="flex items-center justify-between gap-4 border-t px-4 py-3">
-                    <FieldLabel for="report-weekday" class="text-sm font-medium">Day</FieldLabel>
+                    <FieldLabel for="report-weekday" class="text-sm font-medium">{{ t('settingsNotifications.report.day') }}</FieldLabel>
                     <Select :model-value="String(reportWeekday)"
                         @update:model-value="reportWeekday = Number($event)">
-                        <SelectTrigger id="report-weekday" class="w-32 shrink-0" aria-label="Report day of the week">
+                        <SelectTrigger id="report-weekday" class="w-32 shrink-0" :aria-label="t('settingsNotifications.report.dayOfWeekAria')">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem v-for="d in WEEKDAYS" :key="d.value" :value="String(d.value)">
-                                {{ d.label }}
+                                {{ t(d.labelKey) }}
                             </SelectItem>
                         </SelectContent>
                     </Select>
@@ -490,12 +488,12 @@ function discard() {
 
                 <div v-if="reportFrequency === 'monthly'" class="flex items-center justify-between gap-4 border-t px-4 py-3">
                     <div class="min-w-0">
-                        <FieldLabel for="report-day" class="text-sm font-medium">Day of the month</FieldLabel>
-                        <p class="text-xs text-muted-foreground">1 to {{ MAX_REPORT_DAY }}, so it falls in every month.</p>
+                        <FieldLabel for="report-day" class="text-sm font-medium">{{ t('settingsNotifications.report.dayOfMonth') }}</FieldLabel>
+                        <p class="text-xs text-muted-foreground">{{ t('settingsNotifications.report.dayOfMonthHelp', { max: MAX_REPORT_DAY }) }}</p>
                     </div>
                     <Select :model-value="String(reportDay)"
                         @update:model-value="reportDay = Number($event)">
-                        <SelectTrigger id="report-day" class="w-32 shrink-0" aria-label="Report day of the month">
+                        <SelectTrigger id="report-day" class="w-32 shrink-0" :aria-label="t('settingsNotifications.report.dayOfMonthAria')">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -508,9 +506,9 @@ function discard() {
                     class="flex flex-col gap-1.5 border-t px-4 py-3">
                     <div class="flex items-center justify-between gap-4">
                         <div class="min-w-0">
-                            <FieldLabel for="report-time" class="text-sm font-medium">Time</FieldLabel>
+                            <FieldLabel for="report-time" class="text-sm font-medium">{{ t('settingsNotifications.report.time') }}</FieldLabel>
                             <p class="text-xs text-muted-foreground">
-                                Server time ({{ serverTimezone || 'unknown zone' }}).
+                                {{ t('settingsNotifications.report.serverTime', { zone: serverTimezone || t('settingsNotifications.report.unknownZone') }) }}
                             </p>
                         </div>
                         <!-- The browser draws the picker icon: dark:scheme-dark makes it light in dark mode. -->

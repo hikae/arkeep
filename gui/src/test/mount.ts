@@ -3,6 +3,7 @@ import { createPinia, type Pinia } from 'pinia'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
 import { h, type Component } from 'vue'
 import { vi } from 'vitest'
+import { i18n } from '@/i18n'
 
 // InPlaceTeleport replaces <Teleport> and renders its content where it is
 // declared, inside the wrapper.
@@ -39,7 +40,7 @@ export async function mountPage(
     attachTo: options.attachTo,
     // Sheets and dialogs teleport to <body>: render them in place so the
     // wrapper can find their fields.
-    global: { plugins: [router, options.pinia ?? createPinia()], stubs: { teleport: InPlaceTeleport, ...options.stubs } },
+    global: { plugins: [router, i18n, options.pinia ?? createPinia()], stubs: { teleport: InPlaceTeleport, ...options.stubs } },
   })
   await flushPromises()
   return { wrapper, router }

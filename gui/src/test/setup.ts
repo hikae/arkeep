@@ -1,5 +1,10 @@
-import { afterEach, vi } from 'vitest'
+import { afterEach, beforeEach, vi } from 'vitest'
 import { enableAutoUnmount } from '@vue/test-utils'
+import { setLocale } from '@/i18n'
+
+// Tests assert the English copy; pin the locale so a machine set to Chinese
+// does not change which strings the suite sees.
+beforeEach(() => setLocale('en'))
 
 // jsdom has no matchMedia; pages read it for the theme and reduced motion.
 // Every query answers "no match", as in a browser without the preference.

@@ -11,16 +11,19 @@
 
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { AlertCircle, Loader2, Moon, Sun } from '@lucide/vue'
 import { useTheme } from '@/composables/useTheme'
+import LocaleToggle from '@/components/shared/LocaleToggle.vue'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const { isDark, cycle, modeLabel } = useTheme()
+const { t } = useI18n()
 
 const error = ref<string | null>(null)
 
@@ -29,7 +32,7 @@ onMounted(async () => {
   // sign-in (e.g. an existing account it will not link automatically).
   const refused = route.query.error
   if (typeof refused === 'string' && refused) {
-    error.value = `Sign-in refused: ${refused}.`
+    error.value = t('auth.oidc.refused', { reason: refused })
     return
   }
 
@@ -37,7 +40,7 @@ onMounted(async () => {
   const expiresIn = route.query.expires_in
 
   if (typeof token !== 'string' || !token) {
-    error.value = 'Authentication failed: missing token.'
+    error.value = t('auth.oidc.missingToken')
     return
   }
 
@@ -57,7 +60,7 @@ onMounted(async () => {
         : '/dashboard'
     await router.replace(redirectTo)
   } catch {
-    error.value = 'Authentication failed: could not load user profile.'
+    error.value = t('auth.oidc.profileFailed')
   }
 })
 </script>
@@ -75,13 +78,16 @@ onMounted(async () => {
             maskImage: 'radial-gradient(ellipse 60% 60% at 50% 50%, #000 30%, transparent 70%)',
         }" />
 
-        <!-- Theme toggle -->
-        <Button variant="ghost" size="icon"
-            class="absolute z-10 top-4 right-4 text-muted-foreground hover:text-foreground"
-            :aria-label="modeLabel" @click="cycle()">
-            <Sun v-if="isDark" class="size-4" />
-            <Moon v-else class="size-4" />
-        </Button>
+        <!-- Theme and language toggles -->
+        <div class="absolute z-10 top-4 right-4 flex items-center gap-2">
+            <LocaleToggle />
+            <Button variant="ghost" size="icon"
+                class="text-muted-foreground hover:text-foreground"
+                :aria-label="modeLabel" @click="cycle()">
+                <Sun v-if="isDark" class="size-4" />
+                <Moon v-else class="size-4" />
+            </Button>
+        </div>
 
         <!-- Card -->
         <div class="relative z-10 w-full max-w-sm">
@@ -90,18 +96,18 @@ onMounted(async () => {
                     <template v-if="error">
                         <AlertCircle class="size-8 text-destructive" />
                         <div class="text-center space-y-1">
-                            <p class="text-sm font-medium">Sign-in failed</p>
+                            <p class="text-sm font-medium">{{ t('auth.oidc.failed') }}</p>
                             <p class="text-xs text-muted-foreground">{{ error }}</p>
                         </div>
                         <Button variant="outline" size="sm" as-child>
-                            <a href="/login">Back to login</a>
+                            <a href="/login">{{ t('auth.oidc.backToLogin') }}</a>
                         </Button>
                     </template>
                     <template v-else>
                         <Loader2 class="size-8 animate-spin text-muted-foreground" />
                         <div class="text-center space-y-1">
-                            <p class="text-sm font-medium">Signing you in…</p>
-                            <p class="text-xs text-muted-foreground">Please wait while we complete authentication.</p>
+                            <p class="text-sm font-medium">{{ t('auth.oidc.signingIn') }}</p>
+                            <p class="text-xs text-muted-foreground">{{ t('auth.oidc.pleaseWait') }}</p>
                         </div>
                     </template>
                 </CardContent>
@@ -111,6 +117,6 @@ onMounted(async () => {
 
     <!-- Footer -->
     <p class="fixed bottom-0 left-0 right-0 text-center text-xs text-muted-foreground pb-6">
-        Arkeep — open source backup management
+        {{ t('auth.footer') }}
     </p>
 </template>
